@@ -1,76 +1,134 @@
 import 'package:flutter/material.dart';
 
+import 'package:rooms4ums_mobile/core/theme/app_colors.dart';
+
 class AppTheme {
-  // Paleta de colores basada en el CSS web
-  static const Color bgColor = Color(0xFF000000);
-  static const Color bgSecondary = Color(0xFF0A0A0A);
-  static const Color accentColor = Color(0xFFFF8C00);
-  static const Color accentHover = Color(0xFFFF4500);
-  static const Color textPrimary = Color(0xFFFFFFFF);
-  static const Color textSecondary = Color(0xFF888888);
-  static const Color winBorderLight = Color(0xFF444444);
-  static const Color winBorderDark = Color(0xFF111111);
+  const AppTheme._();
 
   static ThemeData get darkRetroTheme {
+    const scheme = ColorScheme.dark(
+      primary: AppColors.accent,
+      secondary: AppColors.bgSecondary,
+      surface: AppColors.bg,
+      onPrimary: Colors.black,
+      onSurface: AppColors.textPrimary,
+      error: Color(0xFFFF5555),
+      onError: Colors.black,
+    );
+
     return ThemeData(
+      useMaterial3: true,
       brightness: Brightness.dark,
-      scaffoldBackgroundColor: bgColor,
-      primaryColor: accentColor,
-      colorScheme: const ColorScheme.dark(
-        primary: accentColor,
-        secondary: bgSecondary,
-        surface: bgColor,
-        onPrimary: Colors.black,
-        onSurface: textPrimary,
-      ),
-      // Tipografía base (usaremos Courier New por defecto en móvil para simular el monospace/retro, 
-      // a menos que luego importemos una fuente pixelart)
-      fontFamily: 'Courier', 
-      
+      scaffoldBackgroundColor: AppColors.bg,
+      colorScheme: scheme,
+      primaryColor: AppColors.accent,
+      fontFamily: 'Courier',
+
       appBarTheme: const AppBarTheme(
-        backgroundColor: bgSecondary,
-        foregroundColor: accentColor,
+        backgroundColor: AppColors.bgSecondary,
+        foregroundColor: AppColors.accent,
         elevation: 0,
         centerTitle: true,
         titleTextStyle: TextStyle(
-          color: accentColor,
+          color: AppColors.accent,
           fontWeight: FontWeight.bold,
-          letterSpacing: 1.0,
-          fontSize: 20,
-          fontFamily: 'Courier',
+          letterSpacing: 2,
+          fontSize: 16,
         ),
+      ),
+
+      iconTheme: const IconThemeData(color: AppColors.accent, size: 20),
+
+      textTheme: const TextTheme(
+        bodyMedium: TextStyle(color: AppColors.textBody, fontSize: 13, height: 1.45),
+        titleMedium: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
+        labelSmall: TextStyle(color: AppColors.textSecondary, fontSize: 10, letterSpacing: 1),
       ),
 
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: bgColor,
-          foregroundColor: accentColor,
+          backgroundColor: AppColors.bgSecondary,
+          foregroundColor: AppColors.accent,
           shape: const BeveledRectangleBorder(),
-          side: const BorderSide(color: winBorderLight, width: 2),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          side: const BorderSide(color: AppColors.winBorder, width: 2),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
           textStyle: const TextStyle(
             fontWeight: FontWeight.bold,
-            letterSpacing: 1.0,
+            letterSpacing: 1.2,
             fontSize: 12,
-            fontFamily: 'Courier',
           ),
         ),
       ),
-      
+
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: accentColor,
-          side: const BorderSide(color: accentColor, width: 2),
+          foregroundColor: AppColors.accent,
+          side: const BorderSide(color: AppColors.accent, width: 2),
           shape: const BeveledRectangleBorder(),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          textStyle: const TextStyle(
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.2,
+            fontSize: 12,
+          ),
         ),
       ),
 
-      cardTheme: CardTheme(
-        color: bgColor,
-        shape: const BeveledRectangleBorder(),
-        side: const BorderSide(color: winBorderLight, width: 2),
-        margin: const EdgeInsets.all(8),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(foregroundColor: AppColors.accent),
       ),
+
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: AppColors.bg,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        labelStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 12, letterSpacing: 1),
+        floatingLabelStyle: const TextStyle(color: AppColors.accent, fontSize: 12, letterSpacing: 1),
+        hintStyle: const TextStyle(color: AppColors.textSecondary),
+        enabledBorder: const OutlineInputBorder(
+          borderSide: BorderSide(color: AppColors.winBorder),
+          borderRadius: BorderRadius.zero,
+        ),
+        focusedBorder: const OutlineInputBorder(
+          borderSide: BorderSide(color: AppColors.accent, width: 2),
+          borderRadius: BorderRadius.zero,
+        ),
+        errorBorder: const OutlineInputBorder(
+          borderSide: BorderSide(color: Color(0xFFFF5555)),
+          borderRadius: BorderRadius.zero,
+        ),
+        focusedErrorBorder: const OutlineInputBorder(
+          borderSide: BorderSide(color: Color(0xFFFF5555), width: 2),
+          borderRadius: BorderRadius.zero,
+        ),
+      ),
+
+      dialogTheme: const DialogThemeData(
+        backgroundColor: AppColors.bgSecondary,
+        shape: BeveledRectangleBorder(
+          side: BorderSide(color: AppColors.accent, width: 2),
+        ),
+        titleTextStyle: TextStyle(
+          color: AppColors.accent,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 1.5,
+          fontSize: 15,
+        ),
+        contentTextStyle: TextStyle(color: AppColors.textBody, fontSize: 13),
+      ),
+
+      snackBarTheme: const SnackBarThemeData(
+        backgroundColor: AppColors.bgPanel,
+        contentTextStyle: TextStyle(color: AppColors.textPrimary, fontSize: 12),
+        behavior: SnackBarBehavior.floating,
+        shape: BeveledRectangleBorder(
+          side: BorderSide(color: AppColors.winBorder),
+        ),
+      ),
+
+      dividerColor: AppColors.winBorder,
+      splashColor: AppColors.accent.withValues(alpha: 0.08),
+      highlightColor: AppColors.accent.withValues(alpha: 0.05),
     );
   }
 }

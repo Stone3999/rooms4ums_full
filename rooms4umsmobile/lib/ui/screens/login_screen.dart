@@ -1,82 +1,103 @@
 import 'package:flutter/material.dart';
 
-class LoginScreen extends StatelessWidget {
+import 'package:rooms4ums_mobile/core/services/api_service.dart';
+import 'package:rooms4ums_mobile/core/theme/app_colors.dart';
+import 'package:rooms4ums_mobile/ui/screens/home_screen.dart';
+import 'package:rooms4ums_mobile/ui/widgets/auth_form_scaffold.dart';
+
+class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
   @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  final _identifierController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+
+  bool _isLoading = false;
+  bool _obscurePassword = true;
+  String? _errorMessage;
+
+  @override
+  void dispose() {
+    _identifierController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleLogin() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      await ApiService.login(
+        identifier: _identifierController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        (route) => false,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _errorMessage = e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Center(
-        child: Container(
-          width: 300,
-          padding: const EdgeInsets.all(16.0),
-          decoration: BoxDecoration(
-            color: Theme.of(context).scaffoldBackgroundColor,
-            border: Border(
-              top: BorderSide(color: const Color(0xFF444444), width: 2),
-              left: BorderSide(color: const Color(0xFF444444), width: 2),
-              right: BorderSide(color: const Color(0xFF111111), width: 2),
-              bottom: BorderSide(color: const Color(0xFF111111), width: 2),
+    return AuthFormScaffold(
+      appBarTitle: 'LOGIN',
+      title: 'ACCESO AL SISTEMA',
+      subtitle: 'INICIA SESIÓN PARA ENTRAR',
+      errorMessage: _errorMessage,
+      formKey: _formKey,
+      isLoading: _isLoading,
+      submitLabel: 'ENTRAR',
+      submitIcon: Icons.login,
+      onSubmit: _handleLogin,
+      fields: [
+        TextFormField(
+          controller: _identifierController,
+          textInputAction: TextInputAction.next,
+          autocorrect: false,
+          decoration: const InputDecoration(labelText: 'USUARIO O CORREO'),
+          validator: (value) =>
+              (value == null || value.trim().isEmpty) ? 'Escribe tu usuario o correo' : null,
+        ),
+        TextFormField(
+          controller: _passwordController,
+          obscureText: _obscurePassword,
+          textInputAction: TextInputAction.done,
+          onFieldSubmitted: (_) => _handleLogin(),
+          decoration: InputDecoration(
+            labelText: 'CONTRASEÑA',
+            suffixIcon: IconButton(
+              icon: Icon(_obscurePassword ? Icons.visibility : Icons.visibility_off, size: 18),
+              color: AppColors.textSecondary,
+              onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
             ),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'LOGIN',
-                style: TextStyle(
-                  color: Color(0xFFFF8C00),
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 2.0,
-                  decoration: TextDecoration.underline,
-                  decorationColor: Color(0xFFFF8C00),
-                ),
-              ),
-              const SizedBox(height: 30),
-              TextField(
-                decoration: InputDecoration(
-                  labelText: 'USERNAME',
-                  labelStyle: const TextStyle(color: Color(0xFF888888)),
-                  enabledBorder: const OutlineInputBorder(
-                    borderSide: BorderSide(color: Color(0xFF444444)),
-                    borderRadius: BorderRadius.zero,
-                  ),
-                  focusedBorder: const OutlineInputBorder(
-                    borderSide: BorderSide(color: Color(0xFFFF8C00)),
-                    borderRadius: BorderRadius.zero,
-                  ),
-                ),
-                style: const TextStyle(color: Colors.white),
-              ),
-              const SizedBox(height: 20),
-              TextField(
-                obscureText: true,
-                decoration: InputDecoration(
-                  labelText: 'PASSWORD',
-                  labelStyle: const TextStyle(color: Color(0xFF888888)),
-                  enabledBorder: const OutlineInputBorder(
-                    borderSide: BorderSide(color: Color(0xFF444444)),
-                    borderRadius: BorderRadius.zero,
-                  ),
-                  focusedBorder: const OutlineInputBorder(
-                    borderSide: BorderSide(color: Color(0xFFFF8C00)),
-                    borderRadius: BorderRadius.zero,
-                  ),
-                ),
-                style: const TextStyle(color: Colors.white),
-              ),
-              const SizedBox(height: 30),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {},
-                  child: const Text('ENTER ROOM'),
-                ),
-              ),
-            ],
-          ),
+          validator: (value) =>
+              (value == null || value.isEmpty) ? 'Escribe tu contraseña' : null,
         ),
+      ],
+      footer: const Text(
+        '¿NO TIENES CUENTA? REGÍSTRATE DESDE LA PANTALLA DE INICIO.',
+        textAlign: TextAlign.center,
+        style: TextStyle(color: AppColors.textSecondary, fontSize: 10, letterSpacing: 0.8),
       ),
     );
   }
