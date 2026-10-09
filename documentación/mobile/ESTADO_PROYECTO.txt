@@ -1,1 +1,4 @@
 Instrucciones para IA: aplicación móviil de rooms4ums
+
+anteriormente, la aplicación web tenía un backend que utilizaba supabase, upstash con redis.
+ahora se quiere hacer la integración de una aplicación móvil, utilizando el mismo backend para lograr la unificación de ambas aplicaciones utilizando un oslo backend.
