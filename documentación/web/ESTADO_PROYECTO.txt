@@ -1,0 +1,199 @@
+================================================================================
+INSTRUCCIONES PARA IA (PRÓXIMAS SESIONES):
+Este archivo es la fuente de verdad sobre el estado del proyecto. 
+Al iniciar, léelo COMPLETAMENTE para entender el contexto actual, qué se ha hecho
+y qué falta. ACTUALIZA la sección "TUS APUNTES" después de cada cambio importante.
+================================================================================
+
+1.- TUS APUNTES (Estado Técnico)
+--------------------------------------------------------------------------------
+ESTADO GENERAL: Sistema v1.0 prácticamente completo. Foros en MongoDB, Búsqueda Avanzada y Gestión de Archivos funcional.
+
+FRONTEND (Angular 19):
+- Hecho: Shell de la app, Login/Register (Biometría), Rework de Sidebar completo.
+- Hecho: Sistema de Voice Chat centralizado.
+- Hecho: Vista de Búsqueda Avanzada con filtros (Rooms, Posts, Voz).
+- Hecho: Creación de Posts con adjuntos (Imágenes, PDF, ZIP) y visualización detallada con imágenes destacadas.
+- Hecho: Sistema de comentarios real conectado a MongoDB.
+- Último realizado: Implementación de UI de Búsqueda Avanzada y Rework de Foros con Multimedia.
+
+BACKEND (NestJS):
+- Hecho: Auth con WebAuthn, integración Triple-DB (PG, Mongo, Redis).
+- Hecho: ForumModule con MongoDB para Posts y Comentarios (Relacional/Separado).
+- Hecho: SearchModule para búsquedas globales en PG, Mongo y Redis.
+- Hecho: Integración de subida de archivos a Supabase en Foros.
+- Hecho: Módulo de Administración (Usuarios, Roles, Permisos y Auditoría).
+- Hecho: Script de migración en DB Supabase (Bloqueo lógico y tabla de auditoría).
+- Falta: Implementar Mail/SMS real (requiere credenciales SMTP/API).
+- Último realizado: Creación de Módulo Admin en NestJS y componentes Admin en Angular.
+
+--------------------------------------------------------------------------------
+2.- MIS APUNTES (Ideas y Pendientes de David)
+--------------------------------------------------------------------------------
+a. Barra de búsqueda Avanzada:
+   - Tendrá su propia vista.
+   - Resultados filtrables: Rooms, Posts, Chats de voz y Actividades.
+
+b. Archivos en Posts:
+   - Capacidad de insertar PDFs, ZIPs e Imágenes.
+   - Si tiene imagen, debe ser el foco principal al entrar al post.
+
+c. Rework de Navegación (PRÓXIMO PASO):
+   - Inicio: Fuera de desplegables, hasta arriba.
+   - FEEDS (Desplegable): Popular, Recientes, Chat de Voz (Acceso directo).
+   - MIS COMUNIDADES: Rework del desplegable actual.
+   - Chat de Voz Centralizado: Los chats de voz ahora viven en un "Room" dedicado de voz, 
+     pero se categorizan por el nombre de los rooms (categorías).
+
+d. Voice Chat Extras:
+   - Integrar lectura automática del chat de voz (Text-to-Speech).
+================================================================================
+3.- INTEGRACIONES 9NO CUATRIMESTRE (IMPORTANTE)
+================================================================================
+
+Prácticas en orden y que requiere cada una:
+1.- Selección de framework (LISTO)
+2.- Selección de display para la página web para la integración con SMART WATCH y TV.
+3.- Apuntes, de las librerías utilizadas para la ejecución del sitio web.
+4.- Añadir una barra de búsqueda (utilizando elasticsearch)
+5.- Hacer una página dinámica usando HTML, CSS y JS (Como tal él quería un, uso crudo de las 3, pero téeeecnicamente ya lo cumplimos por coom está hecha la página)
+6.- Utilizar métodos del DOM 
+7.- Integrar un menú basado en eventos
+8.- Integrar eventos basados en periodos (fondo o banners)
+9.- Documentación de evento JS dentro de la versión de Git para una actualización de temporada
+10.- Agregar evento "Destacar contenido mediante el puntero"
+11 y 12.- Implementar un módulo administrativo para gestionar usuarios aplicando principios de seguridad informática y administración de privilegios (DETALLES DE LO QUE PUEDE HACER EL ADMIN ESTÁN EN CLASSROOM)
+   -> DETALLES (La publicación en classroom para la tarea que debíamos entregar): 
+   "Practicas 11 y 12:
+   Implementar un módulo administrativo para gestionar usuarios aplicando principios de seguridad informática y administración de privilegios.
+
+   Una empresa necesita un sistema para administrar las cuentas de sus empleados.
+
+   El administrador debe poder:
+
+   Crear usuarios.
+   Editar usuarios.
+   Cambiar contraseñas.
+   Asignar roles.
+   Activar o desactivar cuentas.
+   Consultar historial de accesos (simulado).
+
+   Los usuarios normales únicamente podrán:
+
+   Iniciar sesión.
+   Editar su perfil.
+   Cambiar su contraseña.
+   Actividades
+   Parte 1. Administración de usuarios
+
+   Implementar:
+
+   Alta de usuarios.
+   Edición.
+   Eliminación lógica.
+   Activación/desactivación.
+   Parte 2. Gestión de roles
+
+   Crear un módulo donde el administrador pueda:
+
+   Asignar roles.
+   Modificar permisos.
+   Visualizar permisos asociados.
+   Parte 3. Auditoría
+
+   Registrar en una tabla de bitácora:
+
+   Inicio de sesión.
+   Cierre de sesión.
+   Cambio de contraseña.
+   Alta de usuarios.
+   Eliminación de usuarios.
+   Cambios de roles.
+
+   Cada registro deberá almacenar:
+
+   Usuario.
+   Fecha.
+   Hora.
+   Dirección IP (si es posible).
+   Acción realizada.
+   Parte 4. Seguridad
+
+   Implementar al menos cinco controles de seguridad:
+
+   Contraseñas cifradas.
+   Validación de formularios.
+   Protección CSRF (si el framework lo soporta).
+   Expiración de sesión.
+   Bloqueo temporal después de varios intentos fallidos.
+   Políticas de contraseña segura.
+   Evidencias
+   Código fuente.
+   Base de datos.
+   Manual de usuario.
+   Manual técnico.
+   Video demostrativo."
+
+13.- Comprender la administración de cuentas de usuario en un sistema operativo, aplicando las operaciones de creación, modificación, habilitación, deshabilitación y verificación de estados de usuarios, así como el análisis de las implicaciones de seguridad y administración.
+(DETALLES DE LO QUE SE PUEDE HACER ENSTAN EN CLASSROOM)
+   -> DETALLES (La publicación en classroom para la tarea que debíamos entregar): 
+   "Práctica 13: Entregar a más tardar Jueves 23, a las 23:00 hrs.
+   Comprender la administración de cuentas de usuario en un sistema operativo, aplicando las operaciones de creación, modificación, habilitación, deshabilitación y verificación de estados de usuarios, así como el análisis de las implicaciones de seguridad y administración.
+
+   Las cuentas de usuario permiten controlar el acceso a los recursos del sistema operativo.
+   Una cuenta puede encontrarse en dos estados principales:
+   Habilitada: el usuario puede autenticarse normalmente.
+   Deshabilitada: la cuenta permanece almacenada en el sistema, pero el usuario no puede iniciar sesión.
+   Deshabilitar una cuenta es una buena práctica cuando:
+   Un empleado deja temporalmente la organización.
+   Se detecta actividad sospechosa.
+   Un estudiante concluye un curso pero podría regresar.
+   Se requiere conservar la información del usuario sin eliminarla.
+   Eliminar una cuenta implica perder su configuración y puede ocasionar problemas de auditoría.
+
+   Crear tres usuarios, dos del mismo nivel y uno invitado (ej. alumno1, alumno2, invitado) con la misma contraseña para cada uno. Anexar evidencia de la creación.
+
+   Para cada usuario identificar:
+   Nombre completo
+   Estado de la cuenta
+   Fecha de creación
+   Último inicio de sesión
+   Pertenece a qué grupos
+   Si requiere cambio de contraseña
+   Completar una tabla con las siguientes columnas: usuario, habilitado, grupo, cambio de contraseña. Anexar evidencia.
+
+   Deshabilitar uno de los dos usuario con jerarquía igual:
+   Verificar:
+   ¿Aparece como deshabilitado?
+   ¿Puede iniciar sesión?
+   Registrar evidencia mediante captura de pantalla.
+
+   Volver a habilitar el usuario.
+   Comprobar:
+   ¿Puede iniciar sesión?
+   ¿Qué propiedad cambió?
+   Registrar evidencia.
+
+   Realizar pruebas de ejecución de comandos para deshabilitar usuarios. Anexar evidencia.
+
+   Completar la tabla. Filas: Deshabilitar usuario, eliminar usuario, Columnas: Acción, ¿Se conserva la información?, ¿Puede iniciar sesión?, ¿Puede recuperarse fácilmente?
+
+   RESOLVER LO SIGUIENTE:
+   COLUMNAS: Empleado, Situación
+   Ana, Vacaciones por 6 meses
+   Luis, Renunció definitivamente
+   Pedro, Suspendido durante una investigación
+   María, Cambio temporal de departamento
+
+   Para cada caso indicar:
+   ¿Eliminar la cuenta?
+   ¿Deshabilitar la cuenta?
+   Justificar la respuesta.
+
+   Responder:
+   ¿Cuál es la diferencia entre deshabilitar y eliminar un usuario?
+   ¿Qué ventajas ofrece deshabilitar una cuenta?
+   ¿Qué riesgos existen si nunca se deshabilitan cuentas antiguas?
+   ¿Qué sucede con los archivos personales de un usuario deshabilitado?
+   ¿En qué escenarios empresariales se recomienda esta práctica?"
+

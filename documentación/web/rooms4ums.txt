@@ -1,0 +1,62 @@
+================================================================================
+DESCRIPCIÓN COMPLETA DEL PROYECTO: ROOMS4UMS
+================================================================================
+
+1. RESUMEN DEL PROYECTO
+ROOMS4UMS es una plataforma de foros moderna con una estética retro inspirada en el clásico diseño de Windows 95. A pesar de su apariencia nostálgica, el sistema está construido sobre una arquitectura robusta y altamente escalable utilizando tecnologías de vanguardia para garantizar rendimiento óptimo, seguridad y una experiencia de usuario interactiva y fluida.
+
+2. ARQUITECTURA Y TECNOLOGÍAS
+
+FRONTEND:
+- Framework: Angular 19 (uso de Standalone Components y Signals para manejo reactivo del estado).
+- Estilos y UI: Vanilla CSS utilizando Custom Properties para implementar un sistema de diseño estricto estilo Win95 (Win95 Design System).
+- Iconografía: Pixelarticons.
+- Funcionalidades Clave de UI/UX: 
+  - Internacionalización (i18n) con soporte dinámico para 5 idiomas (ES, EN, FR, JP, IT).
+  - Traducción en Tiempo Real mediante la API de MyMemory para posts y comentarios.
+  - Diseño adaptable y preparado para despliegue en múltiples displays (incluyendo Smart Watch y TV).
+  - Sistema de navegación con Sidebar dinámico, feeds (Popular, Recientes, Voice Chat) y eventos del DOM.
+  - Eventos dinámicos basados en periodos/temporadas (cambios de fondo, banners y punteros).
+
+BACKEND:
+- Framework: NestJS.
+- Bases de Datos (Arquitectura Triple-DB):
+  - PostgreSQL: Para datos estructurados y relacionales (Usuarios, Roles, Permisos y Auditoría).
+  - MongoDB: Para el módulo principal de Foros (Posts y Comentarios), garantizando alta escalabilidad en la lectura y escritura de contenido no estructurado.
+  - Redis: Para caché en tiempo real, optimización de búsquedas y manejo ágil de estados.
+- Almacenamiento de Archivos (Storage): Integración con Supabase para la subida segura de archivos adjuntos en los foros.
+- Autenticación de Nueva Generación: Implementación de WebAuthn para admitir inicio de sesión mediante biometría (huella, reconocimiento facial) y passkeys.
+
+3. MÓDULOS Y FUNCIONALIDADES PRINCIPALES
+
+A. MÓDULO DE FOROS Y MULTIMEDIA:
+- Creación, visualización y gestión de Posts.
+- Soporte para múltiples tipos de adjuntos: Imágenes, archivos PDF y archivos ZIP.
+- Sistema de comentarios en tiempo real conectado directamente a MongoDB.
+- Las imágenes adjuntas toman el foco principal visualmente al entrar a una publicación.
+
+B. MOTOR DE BÚSQUEDA AVANZADA:
+- Módulo SearchModule que consulta y unifica información de PostgreSQL, MongoDB y Redis.
+- Permite filtrar resultados exhaustivamente por: Rooms (Comunidades), Posts, y Chats de Voz.
+
+C. SISTEMA DE CHAT DE VOZ CENTRALIZADO:
+- Los canales de voz están organizados dentro de "Rooms" de voz dedicados, categorizados automáticamente por la comunidad correspondiente.
+- Preparado para escalabilidad con futuras implementaciones como accesibilidad Text-to-Speech.
+
+D. MÓDULO DE ADMINISTRACIÓN Y GESTIÓN DE CUENTAS:
+Cumple con estrictos estándares de administración de privilegios de sistemas:
+- Gestión de Usuarios: Permite crear, editar, reactivar y aplicar eliminación lógica (deshabilitar sin borrar datos) para preservar auditorías y archivos personales.
+- Gestión de Roles: Asignación de roles específicos y modificación de permisos por usuario.
+- Auditoría (Bitácora de Eventos): Registra quién, cuándo (fecha/hora), desde dónde (IP) y qué acción se realizó (inicios/cierres de sesión, cambios de contraseña, altas/bajas de usuarios y cambios de rol).
+
+4. CONTROLES DE SEGURIDAD INFORMÁTICA APLICADOS
+El ecosistema implementa controles rigurosos para proteger la información:
+- Cifrado fuerte de contraseñas.
+- Validaciones exhaustivas de datos tanto en Front como en Back.
+- Protección nativa contra falsificación de peticiones en sitios cruzados (CSRF).
+- Expiración de sesiones por inactividad.
+- Políticas de contraseñas seguras y bloqueo temporal automático de cuentas tras múltiples intentos fallidos.
+
+5. PROPÓSITO Y CONTEXTO DEL DESARROLLO
+El proyecto se desarrolla en el marco del 8vo y 9no Cuatrimestre (Professional Web Development), integrando prácticas complejas como: manipulación avanzada del DOM, eventos temporales, interacciones modulares asíncronas, y una administración de privilegios que emula el comportamiento seguro de la gestión de usuarios de un sistema operativo real.
+================================================================================
