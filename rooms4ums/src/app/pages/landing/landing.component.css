@@ -1,0 +1,139 @@
+.landing-page {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    padding: 40px 20px;
+    background-color: var(--bg-color);
+    color: var(--text-primary);
+    align-items: center;
+}
+
+.landing-hero {
+    max-width: 800px;
+    width: 100%;
+    padding: 60px 40px;
+    text-align: center;
+    margin-bottom: 60px;
+}
+
+.main-title {
+    font-size: 4rem;
+    margin-bottom: 20px;
+    letter-spacing: 4px;
+}
+
+.white-text {
+    color: #ffffff;
+}
+
+.hero-desc {
+    font-size: 1.2rem;
+    margin-bottom: 40px;
+    color: var(--text-secondary);
+}
+
+.actions {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+}
+
+.win-button.large {
+    padding: 12px 24px;
+    font-size: 1rem;
+}
+
+.visitor-prompt {
+    margin-top: 30px;
+}
+
+.accent-link {
+    color: var(--accent-color);
+    text-decoration: none;
+    font-size: 0.8rem;
+    font-weight: bold;
+}
+
+.accent-link:hover {
+    text-decoration: underline;
+}
+
+/* Selector de idioma en landing */
+.landing-lang-selector {
+    margin-top: 25px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    color: var(--accent-color);
+}
+
+.win-select {
+    background-color: #000;
+    color: var(--accent-color);
+    border: 1px solid var(--win-border-light);
+    font-family: inherit;
+    font-size: 0.75rem;
+    padding: 4px 8px;
+    outline: none;
+    cursor: pointer;
+}
+
+.features-section {
+    max-width: 1000px;
+    width: 100%;
+    text-align: center;
+    margin-bottom: 60px;
+}
+
+.features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+    margin-top: 40px;
+}
+
+.feature-card {
+    padding: 20px;
+    text-align: center;
+}
+
+.feature-icon {
+    font-size: 2.5rem;
+    color: var(--accent-color);
+    margin-bottom: 15px;
+}
+
+.feature-title {
+    font-size: 1rem;
+    margin-bottom: 10px;
+    color: var(--accent-color);
+    text-transform: uppercase;
+}
+
+.feature-desc {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+.landing-footer {
+    margin-top: auto;
+    padding: 20px;
+    text-align: center;
+}
+
+.text-secondary {
+    color: var(--text-secondary);
+    font-size: 0.7rem;
+}
+
+@media (max-width: 600px) {
+    .main-title {
+        font-size: 2.5rem;
+    }
+    .actions {
+        flex-direction: column;
+        align-items: center;
+    }
+}

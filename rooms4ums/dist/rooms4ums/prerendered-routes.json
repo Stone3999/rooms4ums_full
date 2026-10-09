@@ -1,0 +1,13 @@
+{
+  "routes": {
+    "/": {},
+    "/admin": {},
+    "/help": {},
+    "/inicio": {},
+    "/login": {},
+    "/perfil": {},
+    "/qa": {},
+    "/register": {},
+    "/rules": {}
+  }
+}

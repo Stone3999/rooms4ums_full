@@ -1,0 +1,99 @@
+<div ngSkipHydration style="font-family: Arial, sans-serif;">
+
+  <header style="background: black; color: white; padding: 15px; position: sticky; top: 0; z-index: 100; border-bottom: 3px solid #ff4400;">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <h1 style="margin: 0; font-size: 20px; font-family: 'Courier New', monospace;">rooms4ums - v0.1</h1>
+      
+      <div style="display: flex; align-items: center; justify-content: center; gap: 0;">
+        <input type="text" placeholder="Buscar..." 
+          style="padding: 0 12px; border: 1px solid #ff4400; background: #111; color: white; font-family: 'Courier New', monospace; outline: none; height: 35px; box-sizing: border-box;">
+        
+        <button style="background: #ff4400; color: black; border: 1px solid #ff4400; height: 35px; padding: 0 15px; cursor: pointer; display: flex; align-items: center; gap: 6px; font-weight: bold; box-sizing: border-box;">
+          <span style="line-height: 1; margin-top: 3px;">IR</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+            <polyline points="12 5 19 12 12 19"></polyline>
+          </svg>
+        </button>
+
+      </div>
+      
+    </div>
+    
+  </header>
+
+  <a routerLink="/terms" class="nav-link">Reglas del Sitio</a>
+
+  <main style="padding: 20px; max-width: 800px; margin: 0 auto;">
+
+    <div class="lista-links">
+      
+      <a href="https://angular.dev/overview" class="caja-link">
+        <div style="font-weight: bold; color: blue;"> Angular docs</div>
+        <div style="font-size: 14px; color: #333;">Documentación oficial del framework cliente y sintaxis de plantillas.</div>
+      </a>
+
+      <a href="https://github.com" target="_blank" class="caja-link">
+        <div style="font-weight: bold; color: blue;"> NestJS Documentation</div>
+        <div style="font-size: 14px; color: #333;"> Arquitectura del servidor, decoradores y manejo de módulos.</div>
+      </a>
+
+      <a href="https://firebirdsql.org/en/documentation/" class="caja-link">
+        <div style="font-weight: bold; color: blue;"> Firebird SQL</div>
+        <div style="font-size: 14px; color: #333;">Referencia de SQL y administración de tablas para persistencia.</div>
+      </a>
+      
+      <a href="https://socket.io/docs/v4/" class="caja-link">
+        <div style="font-weight: bold; color: blue;"> Socket.io</div>
+        <div style="font-size: 14px; color: #333;">Protocolos para actividades en vivo y comunicación bidireccional.</div>
+      </a>
+
+      <a href="https://handbook.fide.com/" target="_blank" class="caja-link">
+        <div style="font-weight: bold; color: blue;"> FIDE Handbook</div>
+        <div style="font-size: 14px; color: #333;">Reglamento oficial para validar movimientos en el módulo de Ajedrez.</div>
+      </a>
+
+      <a href="https://jwt.io/" target="_blank" class="caja-link">
+        <div style="font-weight: bold; color: blue;"> JWT Debugger</div>
+        <div style="font-size: 14px; color: #333;">Herramienta para decodificar y verificar la integridad de los tokens de sesión.</div>
+      </a>
+
+      <a href="https://www.typescriptlang.org/docs/" target="_blank" class="caja-link">
+        <div style="font-weight: bold; color: blue;"> TypeScript Docs</div>
+        <div style="font-size: 14px; color: #333;">Superset tipado de JavaScript utilizado en todo el stack (Front & Back).</div>
+      </a>
+
+      <a href="https://lottiefiles.com/" target="_blank" class="caja-link">
+        <div style="font-weight: bold; color: blue;"> LottieFiles</div>
+        <div style="font-size: 14px; color: #333;">Fuente de las animaciones JSON ligeras para las pantallas de carga.</div>
+      </a>
+    </div>
+
+  </main>
+</div>
+
+<style>
+  /* ESTILOS AUSTEROS */
+  .lista-links {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .caja-link {
+    display: block;
+    border: 1px solid #999;
+    background: #eee;
+    padding: 10px;
+    text-decoration: none;
+    color: black;
+  }
+
+  .caja-link:hover {
+    background: #ddd;
+    border: 1px solid black;
+    cursor: pointer;
+  }
+
+  /* Nada de flexbox complejos ni animaciones */
+</style>

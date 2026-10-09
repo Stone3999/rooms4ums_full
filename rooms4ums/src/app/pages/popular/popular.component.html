@@ -1,0 +1,50 @@
+<div class="popular-container">
+  <h1 class="win-title">{{ langService.translate('POPULAR_CONTENT') }}</h1>
+
+  @if (isLoading) {
+    <div class="loading-state">
+      <i class="pixelart-icons-font-clock"></i>
+      <p>Cargando posts populares...</p>
+    </div>
+  } @else if (popularRooms.length === 0) {
+    <div class="empty-state">
+      <i class="pixelart-icons-font-mood-sad"></i>
+      <p>No hay posts populares todavía. ¡Sé el primero en publicar!</p>
+    </div>
+  } @else {
+    <div class="rooms-grid">
+      @for (room of popularRooms; track room.id) {
+        <div class="room-block win-panel">
+          <div class="room-header" [routerLink]="['/foro', room.id]">
+            <!-- Puerta mini -->
+            <div class="mini-door">
+              <div class="door-knob"></div>
+            </div>
+            <h2 class="room-title">ROOM: {{ room.name }}</h2>
+          </div>
+
+          <table class="win-table-feed">
+            <tbody>
+              @for (post of room.posts; track post.id) {
+                <tr class="post-row" (click)="goToPost(room.id, post.id)">
+                  <td class="post-main">
+                    <span class="post-title">{{ post.title }}</span>
+                    <span class="post-author"><i class="pixelart-icons-font-user"></i> {{ post.author }}</span>
+                  </td>
+                  <td class="post-stats">
+                    <span class="reaction"><i class="pixelart-icons-font-arrow-up"></i> {{ post.likes }}</span>
+                    <span class="reaction"><i class="pixelart-icons-font-arrow-down"></i> {{ post.dislikes }}</span>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+          
+          <div class="room-footer">
+            <button class="win-button small" [routerLink]="['/foro', room.id]">{{ langService.translate('VIEW_ALL_ROOM') }}</button>
+          </div>
+        </div>
+      }
+    </div>
+  }
+</div>

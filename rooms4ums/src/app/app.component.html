@@ -1,0 +1,30 @@
+<div class="app-container">
+  @if (showShell()) {
+    <app-header (onToggleSidebar)="toggleSidebar()" ngSkipHydration></app-header>
+  }
+  
+  <div class="main-layout" 
+       [class.sidebar-hidden]="!isSidebarOpen || !showShell()" 
+       [class.activity-hidden]="!isActivityBarOpen || !showShell()">
+    
+    <!-- Left Sidebar (Feeds) -->
+    <aside class="sidebar-wrapper" [class.collapsed]="!isSidebarOpen">
+      @if (showShell()) {
+        <app-sidebar class="sidebar win-panel" [isCollapsed]="!isSidebarOpen"></app-sidebar>
+      }
+    </aside>
+    
+    <!-- Central Content -->
+    <main class="content-area">
+      <router-outlet></router-outlet>
+    </main>
+
+    <!-- Right Activity Bar Wrapper (Locked Hidden) -->
+    <aside class="activity-wrapper">
+      @if (showShell() && isActivityBarOpen) {
+        <app-activity-bar class="activity-bar win-panel"></app-activity-bar>
+      }
+    </aside>
+  </div>
+  <app-notifications></app-notifications>
+</div>

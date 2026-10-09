@@ -1,0 +1,54 @@
+<div class="landing-page">
+  <!-- Hero Section -->
+  <div class="landing-hero win-panel">
+    <h1 class="win-title main-title">Rooms<span class="white-text">4</span>ums</h1>
+    <p class="hero-desc">
+      {{ langService.translate('HERO_DESC') }}
+    </p>
+    <div class="actions">
+      <button class="win-button large" [routerLink]="['/login']">
+        <i class="pixelart-icons-font-user"></i> {{ langService.translate('LOGIN') }}
+      </button>
+      <button class="win-button large" [routerLink]="['/register']">
+        <i class="pixelart-icons-font-user-plus"></i> {{ langService.translate('REGISTER') }}
+      </button>
+    </div>
+    
+    <div class="visitor-prompt">
+      <a routerLink="/inicio" class="accent-link">{{ langService.translate('GUEST_CONTINUE') }}</a>
+    </div>
+
+    <!-- Selector de Idioma en la Landing -->
+    <div class="landing-lang-selector">
+      <i class="pixelart-icons-font-world"></i>
+      <select class="win-select" (change)="changeLang($event)">
+        <option value="es" [selected]="langService.currentLang() === 'es'">ESPAÑOL</option>
+        <option value="en" [selected]="langService.currentLang() === 'en'">ENGLISH</option>
+        <option value="fr" [selected]="langService.currentLang() === 'fr'">FRANÇAIS</option>
+        <option value="jp" [selected]="langService.currentLang() === 'jp'">日本語</option>
+        <option value="it" [selected]="langService.currentLang() === 'it'">ITALIANO</option>
+        <option value="pt" [selected]="langService.currentLang() === 'pt'">PORTUGUÊS</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Features Section -->
+  <div class="features-section">
+    <h2 class="win-title">{{ langService.translate('FEATURES_TITLE') }}</h2>
+    <div class="features-grid">
+      @for (feature of features; track feature.title) {
+        <div class="feature-card win-panel">
+          <div class="feature-icon">
+            <i [class]="feature.icon"></i>
+          </div>
+          <h3 class="feature-title">{{ feature.title }}</h3>
+          <p class="feature-desc">{{ feature.description }}</p>
+        </div>
+      }
+    </div>
+  </div>
+
+  <div class="landing-footer">
+    <span class="text-secondary">&copy; 2026 ROOMS4UMS. {{ langService.translate('ALL_RIGHTS_RESERVED') }}</span>
+  </div>
+</div>

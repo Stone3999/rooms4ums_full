@@ -1,0 +1,58 @@
+[data-season="spring"] {
+  --season-deco-color: #e8a87c;
+  --season-glow: rgba(232, 168, 124, 0.3);
+  --season-border-glow: 0 0 8px rgba(232, 168, 124, 0.4);
+}
+
+[data-season="summer"] {
+  --season-deco-color: #ff8c00;
+  --season-glow: rgba(255, 140, 0, 0.3);
+  --season-border-glow: 0 0 8px rgba(255, 140, 0, 0.4);
+}
+
+[data-season="autumn"] {
+  --season-deco-color: #d4731a;
+  --season-glow: rgba(212, 115, 26, 0.3);
+  --season-border-glow: 0 0 8px rgba(212, 115, 26, 0.4);
+}
+
+[data-season="winter"] {
+  --season-deco-color: #7bb8d4;
+  --season-glow: rgba(123, 184, 212, 0.3);
+  --season-border-glow: 0 0 8px rgba(123, 184, 212, 0.4);
+}
+
+.season-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.65rem;
+  padding: 2px 8px;
+  border: 1px solid var(--accent-color);
+  color: var(--accent-color);
+  background: rgba(0,0,0,0.3);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  animation: seasonPulse 4s ease-in-out infinite;
+}
+
+@keyframes seasonPulse {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+.season-deco {
+  position: fixed;
+  pointer-events: none;
+  font-size: 1.2rem;
+  opacity: 0.15;
+  z-index: 0;
+  animation: seasonFloat 20s linear infinite;
+}
+
+@keyframes seasonFloat {
+  0% { transform: translateY(100vh) rotate(0deg); opacity: 0; }
+  10% { opacity: 0.15; }
+  90% { opacity: 0.15; }
+  100% { transform: translateY(-100vh) rotate(360deg); opacity: 0; }
+}

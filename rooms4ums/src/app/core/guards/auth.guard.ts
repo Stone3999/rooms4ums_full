@@ -1,0 +1,19 @@
+import { inject } from '@angular/core';
+import { CanActivateFn, Router } from '@angular/router';
+import { AuthService } from '../services/auth.service';
+
+/**
+ * Guard que permite el acceso si el usuario está logueado.
+ * Si no lo está, redirige al login.
+ */
+export const authGuard: CanActivateFn = (route, state) => {
+  const authService = inject(AuthService);
+  const router = inject(Router);
+
+  if (authService.isLoggedIn()) {
+    return true;
+  }
+
+  // Redirigir al login si no hay sesión
+  return router.createUrlTree(['/login']);
+};
