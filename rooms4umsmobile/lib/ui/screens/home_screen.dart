@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
 import 'package:rooms4ums_mobile/core/services/api_service.dart';
+import 'package:rooms4ums_mobile/core/services/new_post_watcher.dart';
 import 'package:rooms4ums_mobile/core/theme/app_colors.dart';
+import 'package:rooms4ums_mobile/data/local/local_database.dart';
 import 'package:rooms4ums_mobile/ui/screens/landing_screen.dart';
-import 'package:rooms4ums_mobile/ui/screens/room_screen.dart';
 import 'package:rooms4ums_mobile/ui/screens/popular_screen.dart';
+import 'package:rooms4ums_mobile/ui/screens/room_screen.dart';
 import 'package:rooms4ums_mobile/ui/widgets/door_card.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -15,21 +17,50 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  late Future<List<Map<String, dynamic>>> _roomsFuture;
+  /// Falso mientras la base local aún no pudo leerse (p. ej. sin permisos).
+  bool _cacheAvailable = true;
 
   @override
   void initState() {
     super.initState();
-    _roomsFuture = ApiService.getRooms();
+    _loadRooms();
   }
 
+  /// PRÁCTICA 4: primero red, y si falla se sirve la caché local.
+  Future<void> _loadRooms() async {
+    try {
+      final rooms = await ApiService.getRooms();
+      await LocalDatabase.instance.cacheRooms(rooms);
+      if (mounted) setState(() => _roomsFuture = Future.value(rooms));
+    } catch (_) {
+      final cached = await LocalDatabase.instance.cachedRooms();
+      if (cached.isEmpty) {
+        if (mounted) {
+          setState(() => _roomsFuture = Future.error('No se pudieron cargar las salas.'));
+        }
+        return;
+      }
+      if (!mounted) return;
+      setState(() {
+        _cacheAvailable = true;
+        _roomsFuture = Future.value(cached.map(LocalDatabase.roomFromRow).toList());
+      });
+    }
+  }
+
+  late Future<List<Map<String, dynamic>>> _roomsFuture;
+
   void _reload() {
-    setState(() => _roomsFuture = ApiService.getRooms());
+    _loadRooms();
   }
 
   Future<void> _refresh() async {
-    _reload();
-    await _roomsFuture;
+    _loadRooms();
+    try {
+      await _roomsFuture;
+    } catch (_) {
+      // La caché ya se cargó en _loadRooms.
+    }
   }
 
   Future<void> _logout() async {
@@ -58,6 +89,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (confirmed != true) return;
 
     await ApiService.logout();
+    NewPostWatcher.instance.stop();
     if (!mounted) return;
     Navigator.pushAndRemoveUntil(
       context,
@@ -67,15 +99,18 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _openRoom(Map<String, dynamic> room) {
-    // El backend expone salas por `slug` y los posts se filtran por ese valor.
+    // Tomamos tanto el slug como el ID de la sala para máxima resiliencia
     final slug = (room['slug'] ?? '').toString();
-    if (slug.isEmpty) return;
+    final rawId = (room['id'] ?? room['_id'] ?? '').toString();
+    final targetId = slug.isNotEmpty ? slug : rawId;
+    if (targetId.isEmpty) return;
 
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => RoomScreen(
-          roomId: slug,
+          roomId: targetId,
+          roomSlug: slug.isNotEmpty ? slug : null,
           roomName: (room['name'] ?? 'SALA').toString(),
           isInteractive: room['is_interactive'] == true,
         ),
@@ -130,6 +165,20 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
               ),
             ),
+            if (!_cacheAvailable)
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: Row(
+                  children: [
+                    Icon(Icons.cloud_off, size: 12, color: AppColors.accent),
+                    SizedBox(width: 8),
+                    Text(
+                      'SIN CONEXIÓN · MOSTRANDO CACHÉ LOCAL',
+                      style: TextStyle(color: AppColors.accent, fontSize: 9, letterSpacing: 1),
+                    ),
+                  ],
+                ),
+              ),
             const SizedBox(height: 12),
             Expanded(
               child: RefreshIndicator(

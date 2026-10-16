@@ -17,11 +17,18 @@ class _PopularScreenState extends State<PopularScreen> {
   @override
   void initState() {
     super.initState();
-    _load();
+    _future = ApiService.getPopularPosts();
   }
 
   void _load() {
-    setState(() => _future = ApiService.getPopularPosts());
+    setState(() {
+      _future = ApiService.getPopularPosts();
+    });
+  }
+
+  Future<void> _refresh() async {
+    _load();
+    await _future;
   }
 
   @override
@@ -35,7 +42,7 @@ class _PopularScreenState extends State<PopularScreen> {
         child: RefreshIndicator(
           color: AppColors.accent,
           backgroundColor: AppColors.bgSecondary,
-          onRefresh: () async => _load(),
+          onRefresh: _refresh,
           child: FutureBuilder<List<Map<String, dynamic>>>(
             future: _future,
             builder: (context, snapshot) {

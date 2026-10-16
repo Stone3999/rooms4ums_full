@@ -40,3 +40,27 @@ testem.log
 # System files
 .DS_Store
 Thumbs.db
+
+# --- Builds de subproyectos (el .gitignore raiz solo cubre la raiz) ---
+backendrooms4ums/dist/
+backendrooms4ums/node_modules/
+rooms4umsmobile/build/
+rooms4umsmobile/.dart_tool/
+rooms4umsmobile/android/build/
+rooms4umsmobile/android/.gradle/
+rooms4umsmobile/android/local.properties
+rooms4umsmobile/ios/Pods/
+rooms4umsmobile/macos/Pods/
+wearos/build/
+wearos/.gradle/
+wearos/app/build/
+wearos/local.properties
+
+# --- SECRETOS: nunca subir ---
+# Credencial de servicio de Firebase Admin (da control total del proyecto).
+# Solo debe existir como variable de entorno en Render.
+firebase-service-account*.json
+*service-account*.json
+backendrooms4ums/firebase-service-account.json
+backendrooms4ums/.env
+rooms4umsmobile/.env

@@ -6,6 +6,8 @@ import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:rooms4ums_mobile/core/services/api_service.dart';
+import 'package:rooms4ums_mobile/core/services/deep_link_service.dart';
+import 'package:rooms4ums_mobile/data/local/image_cache.dart';
 import 'package:rooms4ums_mobile/main.dart';
 import 'package:rooms4ums_mobile/ui/widgets/post_card.dart';
 
@@ -109,6 +111,89 @@ void main() {
 
       expect(await ApiService.hasValidSession(client: client), isFalse);
       expect(await ApiService.getToken(), isNull);
+    });
+  });
+
+  // PRÁCTICA 3 - URLs preasignadas
+  group('Deep links', () {
+    test('construye la URL de un post con su sala', () {
+      expect(
+        DeepLinkService.shareLinkForPost('abc123', roomSlug: 'general'),
+        'rooms4ums://post/abc123?room=general',
+      );
+    });
+
+    test('construye la URL de una sala', () {
+      expect(DeepLinkService.shareLinkForRoom('lab'), 'rooms4ums://room/lab');
+    });
+
+    test('la URL generada se vuelve a interpretar sin perder el destino', () {
+      final link = DeepLinkService.shareLinkForPost('abc123', roomSlug: 'general');
+      final parsed = DeepLink.tryParse(link);
+
+      expect(parsed, isA<DeepLinkPost>());
+      final post = parsed! as DeepLinkPost;
+      expect(post.id, 'abc123');
+      expect(post.roomSlug, 'general');
+    });
+
+    test('reconoce las cuatro rutas registradas en el manifest', () {
+      expect(DeepLink.tryParse('rooms4ums://room/lab'), isA<DeepLinkRoom>());
+      expect(DeepLink.tryParse('rooms4ums://post/xyz'), isA<DeepLinkPost>());
+      expect(DeepLink.tryParse('rooms4ums://popular'), isA<DeepLinkPopular>());
+      expect(DeepLink.tryParse('rooms4ums://home'), isA<DeepLinkHome>());
+    });
+
+    test('acepta también el formato https por si se usa universal links', () {
+      final parsed = DeepLink.tryParse('https://rooms4ums.com/room/general');
+      expect(parsed, isA<DeepLinkRoom>());
+      expect((parsed! as DeepLinkRoom).slug, 'general');
+    });
+
+    test('devuelve null en rutas desconocidas o incompletas', () {
+      expect(DeepLink.tryParse('rooms4ums://inexistente/1'), isNull);
+      expect(DeepLink.tryParse('rooms4ums://room'), isNull);
+      expect(DeepLink.tryParse('no-es-una-url'), isNull);
+    });
+  });
+
+  // Práctica 3 + push: vista previa de la foto del post en el reloj.
+  group('Imagen de la notificación', () {
+    test('detecta el primer adjunto que sea imagen', () {
+      final post = {
+        'attachments': [
+          {'url': 'https://cdn.test/documento.pdf', 'type': 'application/pdf'},
+          {'url': 'https://cdn.test/foto.jpg', 'type': 'image/jpeg'},
+        ],
+      };
+      expect(firstImageUrl(post), 'https://cdn.test/foto.jpg');
+    });
+
+    test('infiere que es imagen cuando el backend no manda el tipo', () {
+      final post = {
+        'attachments': [
+          {'url': 'https://cdn.test/6a7e4ef406ccc420.png'},
+        ],
+      };
+      expect(firstImageUrl(post), 'https://cdn.test/6a7e4ef406ccc420.png');
+    });
+
+    test('devuelve null si no hay imagen o no hay adjuntos', () {
+      expect(firstImageUrl({'attachments': <dynamic>[]}), isNull);
+      expect(firstImageUrl({}), isNull);
+      expect(
+        firstImageUrl({
+          'attachments': [
+            {'url': 'https://cdn.test/a.pdf', 'type': 'application/pdf'},
+          ],
+        }),
+        isNull,
+      );
+    });
+
+    test('el nombre de sala de la notificación va en mayúsculas', () {
+      expect(resolveRoomName({'roomId': 'general'}), 'GENERAL');
+      expect(resolveRoomName({}), 'FORO');
     });
   });
 

@@ -30,8 +30,13 @@ class PostCard extends StatelessWidget {
     if (attachments is List) {
       for (final attachment in attachments) {
         if (attachment is Map && attachment['url'] != null) {
+          final url = attachment['url']?.toString() ?? '';
           final type = attachment['type']?.toString() ?? '';
-          if (type.startsWith('image/')) return attachment['url'].toString();
+          if (type.startsWith('image/') || url.endsWith('.png') || url.endsWith('.jpg') || url.endsWith('.jpeg') || url.endsWith('.webp')) {
+            if (url.isNotEmpty) return url;
+          }
+        } else if (attachment is String && (attachment.startsWith('http') || attachment.startsWith('/'))) {
+          return attachment;
         }
       }
     }

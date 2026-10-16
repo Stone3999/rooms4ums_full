@@ -14,6 +14,7 @@ import { RoomsModule } from './rooms/rooms.module';
 import { ForumModule } from './forum/forum.module';
 import { SearchModule } from './search/search.module';
 import { AdminModule } from './admin/admin.module';
+import { PushModule } from './push/push.module';
 
 @Module({
   imports: [
@@ -45,6 +46,9 @@ import { AdminModule } from './admin/admin.module';
     ForumModule,
     SearchModule,
     AdminModule,
+
+    // Push remoto (Firebase Cloud Messaging)
+    PushModule,
   ],
   controllers: [AppController, DiagnosticController],
   providers: [AppService],

@@ -1,17 +1,24 @@
 import 'package:flutter/material.dart';
 
 import 'package:rooms4ums_mobile/core/services/api_service.dart';
+import 'package:rooms4ums_mobile/core/services/deep_link_service.dart';
 import 'package:rooms4ums_mobile/ui/screens/home_screen.dart';
 import 'package:rooms4ums_mobile/ui/screens/login_screen.dart';
 import 'package:rooms4ums_mobile/ui/screens/register_screen.dart';
 
 import 'package:rooms4ums_mobile/core/theme/app_colors.dart';
+import 'package:rooms4ums_mobile/core/services/notification_service.dart';
+import 'package:rooms4ums_mobile/core/services/new_post_watcher.dart';
+import 'package:rooms4ums_mobile/ui/navigation/app_router.dart';
 
 /// Pantalla de bienvenida. Si el usuario ya tiene una sesión válida en el
 /// backend, entra directo al home; si no, ofrece registro / login / acceso
 /// como invitado para poder leer los posts.
 class LandingScreen extends StatefulWidget {
-  const LandingScreen({super.key});
+  /// Deep link con el que se abrió la app, si llegó por una URL.
+  final DeepLink? initialLink;
+
+  const LandingScreen({super.key, this.initialLink});
 
   @override
   State<LandingScreen> createState() => _LandingScreenState();
@@ -32,9 +39,24 @@ class _LandingScreenState extends State<LandingScreen> {
 
     if (hasSession) {
       _goTo(const HomeScreen());
-    } else {
-      setState(() => _isChecking = false);
+
+      // Con sesión activa: arrancar el monitoreo de posts nuevos (push)
+      // y pedir el permiso de notificaciones en Android 13+.
+      NewPostWatcher.instance.start();
+      NotificationService.instance.requestPermission();
+
+      // Si además vino de una URL, enrutamos al destino real.
+      final link = widget.initialLink;
+      if (link != null) {
+        final navigator = Navigator.of(context);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (navigator.mounted) AppRouter.route(navigator, link);
+        });
+      }
+      return;
     }
+
+    setState(() => _isChecking = false);
   }
 
   void _goTo(Widget screen) {

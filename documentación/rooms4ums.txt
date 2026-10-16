@@ -1,4 +1,4 @@
-================================================================================
+﻿================================================================================
 DESCRIPCIÓN COMPLETA DEL PROYECTO: ROOMS4UMS
 ================================================================================
 
@@ -26,6 +26,17 @@ BACKEND:
   - Redis: Para caché en tiempo real, optimización de búsquedas y manejo ágil de estados.
 - Almacenamiento de Archivos (Storage): Integración con Supabase para la subida segura de archivos adjuntos en los foros.
 - Autenticación de Nueva Generación: Implementación de WebAuthn para admitir inicio de sesión mediante biometría (huella, reconocimiento facial) y passkeys.
+- Despliegue: Render, con prefijo global /api en todas las rutas.
+
+APLICACIÓN MÓVIL:
+- Framework: Flutter 3 sobre Android.
+- Cliente del mismo backend NestJS, con un único sistema de sesión compartido con la web.
+- Persistencia de sesión mediante JWT en almacenamiento local y verificación activa contra /api/auth/profile.
+- Interfaz retro coherente con la web: tokens de diseño compartidos (naranja #FF8C00 sobre negro), bordes biselados estilo Windows 95 y tipografía monoespaciada.
+- PRÁCTICA 3 - URLs preasignadas: cada ruta tiene una URL estable (rooms4ums://room/<slug>, rooms4ums://post/<id>, rooms4ums://popular, rooms4ums://home) declarada como intent-filter en el manifiesto. Al tocar una notificación se abre la pantalla exacta, tanto en el teléfono como en el reloj.
+- PRÁCTICA 4 - Almacenamiento estructurado: SQLite con esquema declarado, índices y control de vigencia (TTL) para la lectura sin conexión.
+- Integración con Wear OS: Android refleja las notificaciones en el reloj emparejado, incluida la imagen de vista previa del post, sin requerir aplicación instalada en el wearable.
+- Cobertura de pruebas automatizadas: 21 pruebas sobre el contrato con el backend, el ciclo de deep links y la detección de imágenes.
 
 3. MÓDULOS Y FUNCIONALIDADES PRINCIPALES
 
@@ -59,4 +70,19 @@ El ecosistema implementa controles rigurosos para proteger la información:
 
 5. PROPÓSITO Y CONTEXTO DEL DESARROLLO
 El proyecto se desarrolla en el marco del 8vo y 9no Cuatrimestre (Professional Web Development), integrando prácticas complejas como: manipulación avanzada del DOM, eventos temporales, interacciones modulares asíncronas, y una administración de privilegios que emula el comportamiento seguro de la gestión de usuarios de un sistema operativo real.
+En una etapa posterior se integra la aplicación móvil en Flutter, que reutiliza el
+mismo backend para unificar ambas plataformas bajo una sola fuente de datos y una sola sesión.
+Esta etapa incorpora las prácticas de laboratorio de software de dispositivo (Wear OS),
+conexión con IoT, URLs preasignadas y almacenamiento estructurado local. El detalle técnico
+se encuentra en documentación/mobile/PRACTICAS.txt.
+
+6. PENDIENTES Y DEUDA TÉCNICA CONOCIDA
+- Las imágenes de los posts se sirven con getPublicUrl(), lo que produce URLs públicas y
+  permanentes sin caducidad: cualquier persona con el enlace accede al archivo. La corrección
+  recomendada es migrar a createSignedUrl() con expiración.
+- La aplicación móvil envía los posts como JSON; el backend espera multipart/form-data
+  para adjuntos, por lo que la carga de imágenes solo está disponible en la web.
+- El canal de voz no está implementado en la aplicación móvil.
+- El gateway de tiempo real no emite eventos al crear un post, por lo que la detección de
+  novedades en el móvil es por sondeo y no en tiempo real.
 ================================================================================

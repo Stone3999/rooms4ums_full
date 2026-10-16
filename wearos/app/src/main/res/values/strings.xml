@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Rooms4ums</string>
+
+    <string name="status_iniciando">INICIANDO…</string>
+    <string name="status_sin_telefono">SIN TELÉFONO EN ALCANCE</string>
+    <string name="status_conectado">ENLACE ACTIVO · %1$d nodo(s)</string>
+    <string name="status_error_enlace">ERROR DE ENLACE</string>
+    <string name="status_sensores">ESPERANDO SENSORES…</string>
+    <string name="status_sensores_activos">SENSORES ACTIVOS · 1 Hz</string>
+    <string name="status_deep_link">ABRIENDO: %1$s</string>
+</resources>

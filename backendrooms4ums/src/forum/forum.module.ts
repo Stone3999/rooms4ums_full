@@ -6,6 +6,7 @@ import { ForumController } from './forum.controller';
 import { PostsService } from './posts.service';
 import { CommentsService } from './comments.service';
 import { StorageModule } from '../storage/storage.module';
+import { PushModule } from '../push/push.module';
 
 @Module({
   imports: [
@@ -14,6 +15,8 @@ import { StorageModule } from '../storage/storage.module';
       { name: Comment.name, schema: CommentSchema },
     ]),
     StorageModule,
+    // Necesario para que PostsService pueda emitir el push al crear un post.
+    PushModule,
   ],
   controllers: [ForumController],
   providers: [PostsService, CommentsService],

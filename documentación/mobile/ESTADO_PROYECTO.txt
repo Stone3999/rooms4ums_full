@@ -1,4 +1,62 @@
-Instrucciones para IA: aplicación móviil de rooms4ums
+================================================================================
+ESTADO DEL PROYECTO - APLICACIÓN MÓVIL ROOMS4UMS
+================================================================================
 
-anteriormente, la aplicación web tenía un backend que utilizaba supabase, upstash con redis.
-ahora se quiere hacer la integración de una aplicación móvil, utilizando el mismo backend para lograr la unificación de ambas aplicaciones utilizando un oslo backend.
+1. CONTEXTO
+--------------------------------------------------------------------------------
+La aplicación web tenía un backend propio sobre Supabase (PostgreSQL) y
+Upstash (Redis). El objetivo de esta etapa es integrar una aplicación móvil
+que reutilice ese mismo backend, de modo que ambas aplicaciones queden
+unificadas bajo un único backend y un único sistema de sesión.
+
+Backend unificado: NestJS desplegado en Render
+    https://rooms4ums.onrender.com/api
+    - PostgreSQL (Supabase) : usuarios, roles, credenciales, salas
+    - MongoDB (Mongoose)    : posts y comentarios
+    - Redis (ioredis)       : sesiones y canales de voz
+
+
+2. ESTADO ACTUAL
+--------------------------------------------------------------------------------
+[COMPLETADO] Cliente HTTP contra /api con manejo de sesión JWT persistente.
+[COMPLETADO] Landing con verificación de sesión (entra directo si hay token válido).
+[COMPLETADO] Login y registro con validación y auto-login tras registrar.
+[COMPLETADO] Home con puertas dinámicas cargadas del backend.
+[COMPLETADO] Feed de sala con posts reales, métricas y modo invitado.
+[COMPLETADO] Detalle de post con comentarios y adjuntos.
+[COMPLETADO] Sección de posts populares.
+[COMPLETADO] PRÁCTICA 3 - URLs preasignadas (deep links + compartir enlace).
+[COMPLETADO] Push con vista previa de imagen, reflejado en Wear OS.
+[COMPLETADO] PRÁCTICA 4 - Almacenamiento estructurado (SQLite con TTL).
+[COMPLETADO] Caché offline en salas y feeds.
+[COMPLETADO] 21 pruebas automatizadas. flutter analyze sin incidencias.
+
+Ver detalle completo en PRACTICAS.txt (misma carpeta).
+
+
+3. PENDIENTES
+--------------------------------------------------------------------------------
+[ ] Subida de imágenes desde el móvil: el backend espera multipart/form-data
+    con el campo "files"; la app móvil envía JSON.
+[ ] Canal de voz: requiere cliente socket_io_client contra el gateway existente.
+[ ] URLs firmadas para adjuntos: hoy getPublicUrl() deja los archivos públicos
+    y sin caducidad. Corrección recomendada (~10 líneas en storage.service.ts).
+[ ] Módulo nativo Wear OS (Kotlin) para botones de acción propios en el reloj.
+
+
+4. NOTAS TÉCNICAS RELEVANTES
+--------------------------------------------------------------------------------
+- El backend aplica prefijo global /api (setGlobalPrefix en main.ts).
+  Toda ruta debe incluirlo: /api/rooms, /api/auth/..., /api/forum/...
+
+- El endpoint de posts por sala responde { data: [...], total: n }, no una
+  lista suelta. El cliente desenvuelve ambos formatos por robustez.
+
+- Los posts referencian la sala por SLUG ("general"), no por el UUID de la
+  tabla forums. La navegación móvil usa slug.
+
+- Gradle: el proyecto está en disco D: y la caché de Pub en disco C:. Eso
+  rompe el caché incremental de Kotlin. Está desactivado en
+  android/gradle.properties con kotlin.incremental=false.
+
+================================================================================

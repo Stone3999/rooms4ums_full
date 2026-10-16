@@ -1,0 +1,177 @@
+\documentclass[12pt, letterpaper]{extarticle}
+\usepackage{graphicx, eso-pic, fancyhdr, indentfirst}
+\usepackage[most]{tcolorbox}
+\usepackage{booktabs}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage[spanish]{babel}
+\usepackage{xurl}
+\usepackage{enumitem}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{titlesec}
+\usepackage[colorlinks=true, linkcolor=black, urlcolor=blue, citecolor=black]{hyperref}
+\setlength{\parindent}{1cm}
+\setlength{\headheight}{14.5pt}
+
+\titleformat{\section}{\Large\bfseries}{\thesection.}{0.5em}{}
+\titleformat{\subsection}{\large\bfseries}{\thesubsection}{0.5em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries}{\thesubsubsection}{0.5em}{}
+
+\begin{document}
+
+\thispagestyle{empty}
+
+\begin{center}
+    % Asegúrate de tener una imagen llamada logo.png en la carpeta images/
+    \includegraphics[width=0.45\textwidth]{images/logo.png} \\
+    \vspace*{0.8cm}
+    {\LARGE \textbf{Universidad Tecnol\'ogica de Quer\'etaro}} \\
+    \vspace{0.3cm}
+    {\Large \textbf{Comprehensive Mobile Development --- 10$^\circ$ Cuatrimestre}} \\
+    \vspace{0.8cm}
+    {\huge \textbf{Plan de Avance de Proyecto por Revisiones}} \\
+    \vspace{0.4cm}
+    {\Large \textbf{Proyecto:} ROOMS4UMS Mobile} \\
+    \vspace{1cm}
+    {\Large \textbf{Alumno:} David Eduardo Quiroz Rivera} \\
+    \vspace{0.4cm}
+    {\Large \textbf{Matr\'icula:} 2023371160} \\
+    \vspace{0.4cm}
+    {\Large \textbf{Docente:} Ing. Manuel Contreras Castillo} \\
+    \vspace{0.4cm}
+    {\Large \textbf{Asignatura:} Comprehensive Mobile Development} \\
+    \vspace{0.8cm}
+    {\large \textbf{Revisi\'on:} Avance Cuatrimestral (1 de 3)} \\
+\end{center}
+
+\clearpage
+\newpage
+
+\pagestyle{fancy}
+\fancyhead{}
+\fancyhead[L]{ROOMS4UMS Mobile --- David E. Quiroz Rivera (2023371160)}
+\fancyhead[R]{\thepage}
+\fancyfoot{}
+\renewcommand{\headrulewidth}{0.8pt}
+
+\tableofcontents
+\newpage
+
+\section{T\'itulo del Proyecto}
+\textbf{ROOMS4UMS Mobile: Plataforma de Foros Retro Tem\'aticos y Comunicaci\'on en Tiempo Real en Flutter.}
+
+\section{Resumen del Curso Anterior}
+El proyecto ROOMS4UMS surge originalmente en el cuatrimestre anterior como una aplicaci\'on web integral concebida para la interacci\'on colaborativa entre estudiantes y desarrolladores. La arquitectura base consisti\'o en un frontend en Angular (con est\'etica retro visual basada en interfaces de terminal cl\'asicas) y un backend robusto en NestJS desplegado en la nube (Render). 
+
+Dicho ecosistema integr\'o una arquitectura h\'ibrida de bases de datos: PostgreSQL para gesti\'on relacional de identidades, perfiles y metadatos de salas; MongoDB para almacenamiento flexible y documental de posts, hilos de discusi\'on y adjuntos multimedia; y Redis para sesiones activas y cach\'e de alto rendimiento. Asimismo, se implementaron flujos de autenticaci\'on segura combinando contrase\~nas cifradas con passkeys WebAuthn y tokens JWT.
+
+El desarrollo previo qued\'o desplegado y completamente funcional como plataforma web. No obstante, exist\'ia la necesidad cr\'itica de extender el acceso a un ecosistema m\'ovil nativo que no dependiera de un navegador web, permitiendo a los usuarios interactuar con las salas de discusi\'on (rooms), redactar publicaciones, subir evidencia y recibir retroalimentaci\'on con una experiencia adaptada al hardware y sensores de un smartphone.
+
+\section{Justificaci\'on}
+Limitar una comunidad tecnol\'ogica como ROOMS4UMS \'unicamente a la plataforma web crea una barrera de uso para usuarios que requieren consultar hilos t\'ecnicos, participar en salas tem\'aticas y reportar incidencias sobre la marcha desde sus dispositivos m\'oviles. El uso del navegador m\'ovil representa un antipatr\'on en t\'erminos de experiencia de usuario: genera un consumo excesivo de memoria por capas innecesarias de renderizado, no aprovecha el hardware del dispositivo (sensores, almacenamiento local estructurado sin conexi\'on, c\'amara) y carece de soporte confiable para notificaciones o sincronizaci\'on local.
+
+El desarrollo de la aplicaci\'on m\'ovil nativa con Flutter permite unificar el ecosistema bajo una arquitectura limpia (Data, Domain, Presentation). El smartphone asume el rol de cliente inteligente: consume las APIs REST de NestJS, interact\'ua de manera fluida con las bases de datos de producci\'on y, al mismo tiempo, incorpora mecanismos de tolerancia a fallos mediante almacenamiento local persistente (SQLite), integraci\'on con hardware perif\'erico y gesti\'on eficiente de archivos en red.
+
+\section{Selecci\'on de Smart Device}
+El dispositivo central seleccionado es un \textbf{smartphone Android} (y opcionalmente iOS v\'ia Flutter), el cual funcionar\'a como el centro de control y cliente interactivo de la comunidad. 
+
+Adicionalmente se integra un \textbf{smartwatch con Wear OS} como dispositivo perif\'erico inteligente de la comunidad. Esta decisi\'on sustituye al m\'odulo con microcontrolador ESP32 contemplado en la planificaci\'on inicial, y fue adoptada por indicaci\'on del docente, quien autoriz\'o resolver las Pr\'acticas 1 y 2 sobre un wearable. El reloj cumple un rol equivalente y m\'as relevante para este proyecto:|es el punto de contacto inmediato del usuario con la comunidad, y por definici\'on obliga a ejercitar las capacidades de software de dispositivo y de enlace por radio, que son precisamente el objeto de las Pr\'acticas 1 y 2.
+
+La comunicaci\'on entre el reloj y la aplicaci\'on m\'vil se establece mediante la \textbf{Data Layer API de Google Play Services}, que viaja sobre Bluetooth Low Energy, y se complementa con \textbf{Firebase Cloud Messaging}, que permite que el backend notifique tanto al tel\'efono como al reloj con un \'unico env\'io. El sistema operativo se encarga de replicar automaticamente las notificaciones recibidas en el tel\'efono hacia el reloj emparejado, incluyendo la imagen de vista previa del post y el enlace profundo que direcciona la navegaci\'on.
+
+\section{Apartado para Preguntas de Temas}
+
+\subsection{¿Cu\'al es el tipo de almac\'en estructurado que voy a usar y por qu\'e, si columnas y filas, anidados o por vectores?}
+Se utilizar\'a un modelo de \textbf{columnas y filas (almacenamiento estructurado relacional)} mediante SQLite nativo en el dispositivo m\'ovil (a trav\'es del paquete \texttt{sqflite}), complementado con el almacenamiento documental de MongoDB en el servidor.
+
+\paragraph{Por qu\'e:}
+\begin{enumerate}[label=\alph*)]
+    \item \textbf{Integridad y consultas deterministas:} Las entidades locales como el usuario activo, credenciales de sesi\'on, borrador de posts y cach\'e de salas requieren un esquema formal con tipos definidos (INTEGER, TEXT, DATETIME) y claves primarias para evitar corrupci\'on de datos y asegurar operaciones at\'omicas (ACID).
+    \item \textbf{Disponibilidad offline:} Al almacenar registros estructurados localmente mediante SQLite, la aplicaci\'on m\'ovil puede renderizar instant\'aneamente el perfil del usuario, el historial de consultas y las salas visitadas sin requerir conectividad de red inmediata.
+    \item \textbf{Descarte de vectores:} El almacenamiento puramente vectorial se descarta debido a que el proyecto est\'a orientado a transacciones operativas (CRUD de posts, comentarios, perfiles y autenticaci\'on) y no a motores de b\'usqueda sem\'antica sobre embeddings masivos en el cliente m\'ovil, lo cual consumir\'ia memoria RAM y procesamiento innecesarios.
+\end{enumerate}
+
+\subsection{¿Cu\'al va a ser el tipo de archivos que voy a admitir y hasta cu\'anto, y por qu\'e seg\'un la aplicaci\'on, si solo mp3, solo imagen y hasta cu\'anto almacenamiento?}
+La aplicaci\'on admitir\'a estrictamente \textbf{im\'agenes (PNG, JPG, JPEG, WebP)} y \textbf{documentos ligeros de soporte (PDF)} en el apartado de publicaciones e incidencias t\'ecnicas.
+
+\paragraph{L\'imites espec\'ificos:}
+\begin{itemize}
+    \item \textbf{Im\'agenes de publicaci\'on y perfiles:} M\'aximo 3 MB por archivo, con compresi\'on autom\'atica a WebP/JPEG antes de la subida.
+    \item \textbf{Documentos t\'ecnicos (PDF):} M\'aximo 5 MB por archivo.
+    \item \textbf{L\'imite de almacenamiento local en dispositivo:} Un tope m\'aximo de 100 MB a 150 MB administrados con pol\'itica de reemplazo FIFO/LRU en la cach\'e de red para evitar la saturaci\'on del almacenamiento del smartphone (\textit{memory bloat}).
+\end{itemize}
+
+\paragraph{Por qu\'e:}
+ROOMS4UMS es una plataforma de debate t\'ecnico y soporte sobre salas tem\'aticas. Los adjuntos requeridos son capturas de pantalla de c\'odigo, errores visuales, diagramas de arquitectura y manuales en PDF. Permitir archivos pesados de video o audio sin restricciones provocar\'ia cuellos de botella en la red m\'ovil y saturar\'ia r\'apidamente los planes de datos de los estudiantes.
+
+\section{Divisi\'on de Entregables en 3 Secciones (Revisiones)}
+
+\subsection{Primer Parcial --- Revisi\'on 1: Arquitectura Base, Consumo de URLs y Almacenamiento Estructurado}
+\begin{itemize}
+    \item \textbf{Setup del proyecto m\'ovil en Flutter:} Estructura base modular (Clean Architecture), sistema de temas retro monocrom\'atico / CRT (\texttt{AppTheme}) e implementaci\'on de navegaci\'on reactiva entre vistas.
+    \item \textbf{Consumo de APIs y URLs Preasignadas:} Integraci\'on de \texttt{ApiService} con cliente HTTP robusto, timeouts de seguridad (20s) y consumo estructurado de endpoints REST de salas y foros (\texttt{/api/rooms}, \texttt{/api/forum/rooms/\{roomId\}/posts}).
+    \item \textbf{Almacenamiento Estructurado Local:} Configuraci\'on de base de datos relacional local en SQLite para persistencia de sesiones, preferencias de usuario y cach\'e de salas sin conexi\'on.
+    \item \textbf{Flujo de Autenticaci\'on M\'ovil:} Implementaci\'on de pantallas de Login y Registro conectadas al backend NestJS, validando credenciales y almacenando tokens JWT en almacenamiento seguro (\texttt{SharedPreferences} / SQLite).
+    \item \textbf{Navegaci\'on y Visualizaci\'on de Salas (Feed):} Renderizado de lista de salas tem\'aticas en cuadr\'icula interactiva (\texttt{DoorCard}), transici\'on a la sala (\texttt{RoomScreen}) y carga reactiva de publicaciones.
+\end{itemize}
+
+\subsection{Segundo Parcial --- Revisi\'on 2: Interacci\'on IoT, Hardware y C\'odigo Seguro}
+\begin{itemize}
+    \item \textbf{Conexi\'on con Smart Device / Dispositivo IoT:} Desarrollo del protocolo de comunicaci\'on directa (TCP/IP Sockets o Bluetooth) entre la app m\'ovil y el nodo de hardware externo.
+    \item \textbf{Gesti\'on de Firmware y Telemetr\'ia:} Intercambio de se\~nales de control hacia el hardware perif\'erico para indicar actividad en tiempo real de las salas (notificaci\'on lum\'inica f\'isica o alertas de estado del servidor).
+    \item \textbf{Pr\'acticas de C\'odigo Seguro:} Sanitizaci\'on de entradas, eliminaci\'on absoluta de credenciales o tokens en registros de consola (Logcat), ofuscaci\'on de contrase\~nas en campos de entrada y protecci\'on contra ataques de inyecci\'on o manipulaci\'on de sesi\'on.
+    \item \textbf{Creaci\'on y Publicaci\'on de Posts con Adjuntos:} Despliegue del formulario \texttt{\_PostComposer} para permitir a usuarios autenticados crear hilos t\'ecnicos y subir im\'agenes hacia el servicio de almacenamiento del servidor.
+\end{itemize}
+
+\subsection{Tercer Parcial --- Revisi\'on 3: Optimizaci\'on, Cach\'e Multimedia y Entrega Final}
+\begin{itemize}
+    \item \textbf{Sistema Completo de Comentarios y Respuestas:} Visualizaci\'on del hilo de discusi\'on de cada publicaci\'on (\texttt{PostDetailScreen}), inserci\'on reactiva de comentarios y actualizaci\'on de contadores.
+    \item \textbf{Gesti\'on Avanzada de Cach\'e y Memoria:} Implementaci\'on de un administrador de im\'agenes en disco que imponga la cuota l\'imite de 100 MB con purgado autom\'atico LRU para prevenir fugas de memoria (Profiling con Flutter DevTools).
+    \item \textbf{Tolerancia a Fallos y Modo Offline Integral:} Resiliencia ante ca\'idas de red o suspensi\'on de servicios en la nube, mostrando estados vac\'ios amigables y reintentos autom\'aticos.
+    \item \textbf{Pruebas de Integraci\'on y Generaci\'on de Release APK:} Cobertura de pruebas unitarias y de widgets (\texttt{flutter test}), optimizaci\'on de rendimiento a 60 FPS estables y empaquetado del instalable final.
+\end{itemize}
+
+\section{Secci\'on de Pr\'acticas de Laboratorio Aplicadas al Proyecto}
+Las cuatro pr\'acticas oficiales de la asignatura se integran de manera directa y funcional dentro de la aplicaci\'on m\'ovil ROOMS4UMS:
+
+\begin{enumerate}[label=\textbf{\arabic*.}]
+    \item \textbf{Pr\'actica 1: Software de Dispositivo Embebido (Wear OS)} \\
+    \textbf{Aplicaci\'on al proyecto:} Desarrollo de un m\'odulo nativo en Kotlin para el reloj (\texttt{wearos/}), con \texttt{compileSdk} y \texttt{targetSdk} en API 33. El m\'odulo cumple cuatro requisitos de un entorno embebido:
+    \begin{itemize}
+        \item \textbf{Hardware objetivo real y restringido:} ejecuta sobre el SoC de bajo consumo del reloj, con memoria limitada y sin navegador ni servidor.
+        \item \textbf{Acceso directo a sensores f\'isicos:} lectura del aceler\'ometro y giroscopio mediante \texttt{SensorManager}, publicando magnitud y detecci\'on de giro.
+        \item \textbf{Ejecuci\'on persistente en segundo plano:} un \texttt{Service} en primer plano con \texttt{startForeground()} y \texttt{Wakelock} mantiene la captura de sensores viva con la pantalla apagada, que es la diferencia essential frente a una aplicaci\'on de tel\'efono ordinaria.
+        \item \textbf{Gesti\'on de energ\'ia:} muestreo a 1~Hz en lugar de los 50~Hz nativos, como compromiso expl\'icito entre fidelidad y presupuesto de bater\'ia del dispositivo.
+    \end{itemize}
+    
+    \item \textbf{Pr\'actica 2: Conexi\'on con un Dispositivo IoT} \\
+    \textbf{Aplicaci\'on al proyecto:} Implementaci\'on de un canal bidireccional entre el reloj y la aplicaci\'on m\'vil mediante la \textbf{Data Layer API} (\texttt{play-services-wearable}) sobre \textbf{Bluetooth Low Energy}. Se emplean los dos canales que ofrece la API:
+    \begin{itemize}
+        \item \textbf{Data API} (\texttt{putDataItem}): para la telemetr\'ia de sensores, que debe \emph{quedan} en el dispositivo y sincronizarse autom\'aticamente cuando el otro extremo entra en alcance.
+        \item \textbf{Message API} (\texttt{sendMessage}): para eventos que no se pueden perder, como la apertura de una sala o la creaci\'on de un post.
+    \end{itemize}
+    El enlace se verifica en tiempo de ejecuci\'on consultando \texttt{Wearable.getNodeClient().connectedNodes}, que expone los nodos emparejados y en alcance. El wearable reporta adem\'as el nivel de bater\'ia, dato relevante para un dispositivo con autonomia limitada.
+
+    \item \textbf{Pr\'actica 3: Consumo de una URL Preasignada (Peticiones HTTP y JSON)} \\
+    \textbf{Aplicaci\'on al proyecto:} Se implementan dos mecanismos complementarios.
+    
+    \emph{(a) URLs de direccionamiento,} que asignan a cada ruta de la aplicaci\'on un identificador estable y compartible: \texttt{rooms4ums://room/<slug>}, \texttt{rooms4ums://post/<id>}, \texttt{rooms4ums://popular} y \texttt{rooms4ums://home}. Se declaran en el manifiesto Android mediante un \texttt{intent-filter} con las categor\'ias \texttt{DEFAULT} y \texttt{BROWSABLE}. Estas URLs viajan como \textit{payload} de las notificaciones, de modo que al tocar el aviso---en el tel\'efono o en el reloj--- el sistema abre la pantalla exacta del post. El detalle de cada publicaci\'on incluye adem\'as un bot\'on que genera y copia el enlace, completando el ciclo de compartici\'on.
+    
+    \emph{(b) URLs de recursos,} que la aplicaci\'on consume para descargar y renderizar los adjuntos multimedia de las publicaciones, decodific\'andolos como mapas de bits para las vistas previas. 
+    
+    \paragraph{Nota de auditor\'ia:} se detect\'o que los adjuntos se sirven actualmente mediante \texttt{getPublicUrl()}, lo que produce URLs p\'ublicas y permanentes sin caducidad. La migraci\'on recomendada es \texttt{createSignedUrl()} con expiraci\'on, lo que correcta el defecto de seguridad 
+    
+    \item \textbf{Pr\'actica 4: Almacenamiento Estructurado (SQLite / SQLite DAO)} \\
+    \textbf{Aplicaci\'on al proyecto:} Implementaci\'on de una base de datos local SQLite con esquema declarado e \'indices en \texttt{lib/data/local/local_database.dart}. El esquema comprende las tablas \texttt{rooms\_cache} y \texttt{posts\_cache}, con \'indices compuestos sobre \texttt{(room\_id, created\_at)} para consultas de feed y sobre \texttt{(fetch\_at)} para la purga por vigencia.
+    
+    \paragraph{Control de vigencia:} cada registro almacena su marca de tiempo de obtenci\'on. Las publicaciones expiran a los 15 minutos y las salas a las 6 horas; los registros vencidos se eliminan al arrancar la aplicaci\'on y tras cada escritura. 
+    
+    \paragraph{Estrategia de acceso:} la aplicaci\'on sigue el patr\'on \emph{red primero, cach\'e como respaldo}. Si el backend no responde, se sirve el contenido local y la interfaz lo indica de forma explícita al usuario, de modo que nunca se confunda contenido en vivo con contenido cacheado.
+    
+    \paragraph{Aislamiento de credenciales:} el token de sesi\'on permanece deliberadamente fuera de SQLite, en almacenamiento clave-valor, para no elevar su exposici\'on ante consultas sobre el esquema.
+\end{enumerate}
+
+\section{Conclusi\'on}
+La aplicaci\'on m\'ovil ROOMS4UMS transforma una plataforma concebida inicialmente para la web en un ecosistema m\'ovil completo, eficiente y aut\'onomo. A trav\'es de la implementaci\'on rigurosa de las cuatro pr\'acticas de laboratorio ---firmware, conectividad IoT, consumo de URLs preasignadas y persistencia estructurada local en SQLite--- se garantiza una arquitectura desacoplada, con alta tolerancia a la latencia y fallas de red, y con una experiencia de usuario retro s\'olida y segura.
+
+\end{document}

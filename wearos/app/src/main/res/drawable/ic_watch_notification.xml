@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ícono monocromo para notificaciones en Wear OS. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFFFF">
+
+    <!-- Marco de la "puerta" del diseño retro -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M4,2h9v20H4zM6,4v16h5V4z" />
+
+    <!-- Pomo -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M11,11h1.5v1.5H11z" />
+
+    <!-- Monitor/terminal -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M15,4h5v16h-5zM17,6h1v2h-1zM17,9h1v1h-1zM17,11h1v1h-1zM17,13h1v1h-1z" />
+</vector>

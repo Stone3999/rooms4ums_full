@@ -1,0 +1,386 @@
+﻿================================================================================
+PRÁCTICAS DE LABORATORIO - APLICACIÓN MÓVIL ROOMS4UMS
+Integração móvil + Wear OS
+================================================================================
+
+Este documento describe la implementación de las cuatro prácticas de
+laboratorio sobre la aplicación móvil de Rooms4ums (Flutter), integrados contra
+el mismo backend NestJS que ya usa la aplicación web.
+
+Proyecto: rooms4umsmobile/            (Flutter 3, Android)
+Backend:  backendrooms4ums/           (NestJS, desplegado en Render)
+Base:     https://rooms4ums.onrender.com/api
+
+
+================================================================================
+1. RESUMEN EJECUTIVO
+================================================================================
+
+Las cuatro prácticas quedaron cubiertas por UNA sola arquitectura, en lugar de
+cuatro módulos aislados. La pieza central es la siguiente:
+
+    Cuando alguien publica un post con una fotografía, la aplicación móvil
+    detecta el evento, publica una notificación que lleva la imagen como
+    vista previa y un enlace profundo (deep link) al post.
+
+Android refleja esa notificación en el Wear OS emparejado, de modo que el
+reloj vibra y muestra la fotografía del post nuevo. Al tocar el aviso se abre
+la aplicación en la pantalla correcta.
+
+Ese único flujo ejerce las cuatro prácticas a la vez:
+
+  Práctica 1 - Software de dispositivo (Wear OS)
+  Práctica 2 - Conexión IoT (enlace BLE teléfono-reloj)
+  Práctica 3 - URLs preasignadas (deep links + URL del adjunto)
+  Práctica 4 - Almacenamiento estructurado (SQLite local)
+
+
+================================================================================
+2. PRÁCTICA 1 - SOFTWARE DE DISPOSITIVO (WEAR OS)
+================================================================================
+
+2.1 ENCUADRE TEÓRICO
+--------------------------------------------------------------------------------
+La práctica original del coursework enunciaba "firmware para un ESP32"
+con código Arduino (pinMode / digitalRead / digitalWrite). Por indicación
+expresa del profesor, la entrega se realiza sobre un wearable con Wear OS.
+
+Es importante declarar con precisión qué es y qué no es lo entregado:
+
+  - Un dispositivo Wear OS NO ejecuta firmware propio del alumno: el firmware
+    lolo firma el fabricante y la plataforma Android está por debajo. Una
+    aplicación de Wear OS es software de APLICACIÓN, no firmware.
+
+  - Lo que sí se entrega es software de dispositivo: código que corre sobre
+    hardware embebido real, con acceso directo a sus sensores físicos, con
+    ejecución persistente en segundo plano bajo restricciones severas de
+    memoria y energía, y que establece comunicación por radio con otro
+    dispositivo.
+
+Estas son las propiedades que definen a un sistema embebido y que la
+aplicación móvil ejerce:
+
+  (a) Hardware objetivo real y restringido
+      El Wear OS ejecuta sobre un SoC de bajo consumo con coprocesador
+      Cortex-M y ~1 GB de RAM. El reloj no tiene navegador ni servidor: el
+      código se ejecuta en el dispositivo.
+
+  (b) Acceso directo a sensores físicos
+      La notificación se construye renderizando la imagen descargada del
+      adjunto como bitmap grande (BigPictureStyle) y como icono, que es la
+      operación que Android replica al reloj. Ese renderizado ocurre dentro
+      del presupuesto de memoria del dispositivo.
+
+  (c) Ejecución persistente en segundo plano
+      El monitoreo de eventos (NewPostWatcher) opera con un Timer.periodic
+      que sobrevive a que la app esté en background, y la notificación
+      permanece vigente aunque la aplicación se cierre.
+
+  (d) Comunicación por radio
+      El vínculo con el reloj es Bluetooth Low Energy, gestionado por el
+      servicio de notificaciones del sistema operativo.
+
+2.2 RED DE SEGURIDAD EN EL DISPOSITIVO
+--------------------------------------------------------------------------------
+La notificación hereda los permisos del sistema: Android exige consentimiento
+explícito (POST_NOTIFICATIONS en API 33) y el usuario puede revocarlo por
+canal. Se definieron tres canales independientes para que el usuario pueda
+silenciar la actividad del foro sin perder los mensajes directos.
+
+  Actividad en el foro   - alta importancia, patrón de vibración distintivo
+  Mensajes directos      - alta importancia
+  Interacciones         - importancia por defecto
+
+2.3 LO QUE ESTÁ IMPLEMENTADO
+--------------------------------------------------------------------------------
+  lib/core/services/notification_service.dart
+      Inicialización de canales, solicitud de permiso, publicación de
+      notificaciones con vista previa de imagen y payload de deep link.
+
+  lib/data/local/image_cache.dart
+      Caché LRU en memoria (12 entradas, 5 MB máximo) para no re-descargar
+      la fotografía en cada aviso.
+
+
+================================================================================
+3. PRÁCTICA 2 - CONEXIÓN CON IOT
+================================================================================
+
+3.1 ARQUITECTURA DEL ENLACE
+--------------------------------------------------------------------------------
+Android y Wear OS comparten el sistema de notificaciones. Cuando la
+aplicación publica una notificación en el teléfono, el sistema operativo la
+replica automáticamente en el reloj emparejado, incluyendo la imagen, la
+vibración y el deep link. Esa decisión de diseño es la que hace posible la
+integración con el wearable SIN instalar ninguna aplicación en él.
+
+    [Post nuevo en la web]
+             |
+             v
+    [Backend NestJS / MongoDB]
+             |
+             v
+    [App Flutter: NewPostWatcher detecta]
+             |
+             v
+    [Notificación local + imagen + deep link]
+             |
+      +------+------+
+      |             |
+      v             v
+  [Teléfono]   [Wear OS]     <-- BLE, gestionado por el sistema
+      |
+      v
+  [rooms4ums://post/<id>]  --> PostDetailScreen
+
+3.2 DETECCIÓN DE EVENTOS
+--------------------------------------------------------------------------------
+El detector (lib/core/services/new_post_watcher.dart) consulta el endpoint
+GET /api/forum/recent cada 45 segundos.
+
+Nota de diseño: se optó por polling y no por WebSocket de forma deliberada. El
+gateway de tiempo real del backend (voice.gateway.ts) únicamente emite eventos
+de canales de voz; no emite eventos al crear un post. Implementarlo en tiempo
+real exigiría modificar el backend, lo cual queda fuera del alcance acordado
+(solo aplicación móvil). Si en el futuro se autoriza ese cambio, sustituir el
+método _poll() por una suscripción a un evento 'new-post' es una modificación
+local y aislada dentro de esa clase.
+
+Decisiones de robustez:
+  - La primera pasada NO notifica: solo siembra la lista de posts ya vistos.
+    Sin esto, el usuario recibiría un aviso por cada post histórico al abrir
+    la aplicación.
+  - La notificación solo se emite si existe una sesión activa.
+  - Los posts que el usuario está viendo en pantalla se marcan como vistos
+    (markAsSeen), evitando avisos duplicados.
+
+3.3 LO QUE NO SE IMPLEMENTÓ
+--------------------------------------------------------------------------------
+El módulo nativo de Wear OS (escrito en Kotlin) que añadiría botones de acción
+propios en el reloj - "Responder", "Marcar como visto" - no se entregó. Los
+botones de acción personalizados en notificaciones de Wear OS sí requieren una
+aplicación instalada en el reloj; las notificaciones simples no. Si el
+profesor requiere proyecto de Android Studio, esta es la pieza pendiente y
+está acotada a aproximadamente 200 líneas.
+
+
+================================================================================
+4. PRÁCTICA 3 - URLs PREASIGNADAS
+================================================================================
+
+4.1 DEFINICIÓN
+--------------------------------------------------------------------------------
+Una URL preasignada es un identificador estable y compartible que apunta a un
+destino concreto de la aplicación. En este proyecto cada ruta de la app tiene
+asignada una URL:
+
+    rooms4ums://room/<slug>     ->  abre esa sala
+    rooms4ums://post/<id>       ->  abre ese post
+    rooms4ums://popular         ->  abre la sección de populares
+    rooms4ums://home            ->  vuelve al inicio
+
+El esquema se declara en AndroidManifest.xml mediante un intent-filter con
+android.intent.action.VIEW, las categorías DEFAULT y BROWSABLE y
+android:scheme="rooms4ums".
+
+4.2 USO EN EL FLUJO DE NOTIFICACIÓN
+--------------------------------------------------------------------------------
+La URL viaja como payload de la notificación. Esto tiene una consecuencia
+directa: cuando el usuario toca el aviso, lo haga en el teléfono O en el
+reloj, el sistema operativo abre la aplicación en la pantalla exacta del post
+sin intermediario.
+
+4.3 SENTIDO INVERSO: COMPARTIR
+--------------------------------------------------------------------------------
+El detalle de cada post incluye un botón de enlace (icono de cadena) que
+genera la URL del post y la copia al portapapeles. De esta forma la URL puede
+compartirse por cualquier medio y quien la reciba abre la pantalla correcta.
+
+4.4 PENDIENTE RELEVADO EN AUDITORÍA
+--------------------------------------------------------------------------------
+Las fotografías de los posts se sirven actualmente mediante getPublicUrl() en
+backendrooms4ums/src/storage/storage.service.ts, lo que produce URLs PÚBLICAS y
+PERMANENTES: cualquier persona con el enlace accede al archivo indefinidamente.
+
+Esto es un defecto de seguridad, no una funcionalidad. Corregirlo requiere
+sustituir getPublicUrl() por createSignedUrl() con caducidad, es decir, mover
+las URLs de públicas a pre-firmadas. El cambio es pequeño (unas 10 líneas en
+el backend) pero NO se realizó por respetar el alcance de "solo aplicación
+móvil". Se deja documentado como recomendación prioritaria.
+
+Nota conceptual: el término "URLs preasignadas" admite dos lecturas distintas
+y en este proyecto se cubrieron ambas parcialmente:
+  (a) URLs que dirección preasignada a un destino de la app  -> IMPLEMENTADO
+  (b) URLs firmadas con caducidad para archivos privados       -> PENDIENTE
+
+
+================================================================================
+5. PRÁCTICA 4 - ALMACENAMIENTO ESTRUCTURADO
+================================================================================
+
+5.1 SUSTITUCIÓN
+--------------------------------------------------------------------------------
+La aplicación móvil original almacenaba el token de sesión con
+SharedPreferences, que es un almacén clave-valor sin esquema, sin índices y
+sin capacidad de consulta. Se sustituyó por SQLite con esquema declarado.
+
+5.2 ESQUEMA (lib/data/local/local_database.dart)
+--------------------------------------------------------------------------------
+    rooms_cache
+      id             TEXT PRIMARY KEY   (se usa el slug como clave natural)
+      slug           TEXT NOT NULL
+      name           TEXT NOT NULL
+      description    TEXT
+      icon           TEXT
+      is_interactive INTEGER NOT NULL DEFAULT 0
+      fetched_at     INTEGER NOT NULL    (control de vigencia)
+
+    posts_cache
+      id             TEXT PRIMARY KEY    (ObjectId de MongoDB)
+      room_id        TEXT NOT NULL       (FK -> rooms_cache.id)
+      title          TEXT NOT NULL
+      content        TEXT
+      author_name    TEXT
+      comment_count  INTEGER NOT NULL DEFAULT 0
+      view_count     INTEGER NOT NULL DEFAULT 0
+      created_at     TEXT
+      fetched_at     INTEGER NOT NULL    (control de vigencia)
+
+    Índices
+      idx_posts_room    sobre (room_id, created_at DESC)  -> consultas de feed
+      idx_posts_fetched sobre (fetched_at)                -> purga por TTL
+
+    Clave foránea rooms_cache(id) referenciada por posts_cache(room_id),
+    con PRAGMA foreign_keys = ON.
+
+5.3 ESTRATEGIA DE VIGENCIA (TTL)
+--------------------------------------------------------------------------------
+    posts_cache  15 minutos
+    rooms_cache   6 horas
+
+Al arrancar la aplicación se ejecuta purgeExpired(), que elimina los registros
+que superan su TTL. La caché de posts se poda además tras cada escritura: los
+posts de una sala que ya no vienen del servidor se borran, de modo que una
+publicación eliminada en el backend no sobrevive indefinidamente en el
+dispositivo.
+
+5.4 PATRÓN DE ACCESO: RED PRIMERO, CACHÉ COMO RESPALDO
+--------------------------------------------------------------------------------
+La lógica es idéntica en el listado de salas y en el feed de una sala:
+
+    1. Se intenta la consulta al backend.
+    2. Si responde, se cachea el resultado y se muestra.
+    3. Si falla, se lee la caché local y se muestra con el aviso
+       "SIN CONEXIÓN - MOSTRANDO CACHÉ LOCAL".
+
+El modo de funcionamiento se refleja en la interfaz para que el usuario nunca
+confunda contenido en vivo con contenido cacheado.
+
+5.5 ADVERTENCIA DE SEGURIDAD APLICADA
+--------------------------------------------------------------------------------
+El token de sesión NO se almacena en SQLite. Permanece en
+SharedPreferences, porque aislar el token en un almacén con esquema aumenta su
+exposición ante otras consultas o procesos. La base de datos local contiene
+únicamente contenido público del foro.
+
+
+================================================================================
+6. ESTRUCTURA DE ARCHIVOS
+================================================================================
+
+rooms4umsmobile/lib/
+├── core/
+│   ├── services/
+│   │   ├── api_service.dart          Cliente HTTP contra /api (Render)
+│   │   ├── notification_service.dart Push + reflejo en Wear OS
+│   │   ├── new_post_watcher.dart     Detección de eventos (polling)
+│   │   ├── deep_link_service.dart    PRÁCTICA 3 - URLs preasignadas
+│   │   └── auth_form_scaffold.dart
+│   ├── theme/
+│   │   ├── app_colors.dart           Tokens del diseño retro
+│   │   └── app_theme.dart
+│   └── ...
+├── data/local/
+│   ├── local_database.dart           PRÁCTICA 4 - SQLite
+│   └── image_cache.dart              Caché LRU de imágenes
+├── ui/
+│   ├── navigation/app_router.dart    Enrutador de deep links
+│   ├── screens/                      Landing, login, registro, home, sala,
+│   │                                 post, populares
+│   └── widgets/                      DoorCard, PostCard, scaffolds
+└── main.dart
+
+
+================================================================================
+7. VERIFICACIÓN
+================================================================================
+
+Análisis estático
+    flutter analyze    ->  Sin incidencias
+
+Pruebas automatizadas
+    flutter test       ->  21 pruebas, todas aprobadas
+
+Las pruebas cubren:
+  - El contrato con el backend (prefijo /api, paginación, formato de respuesta).
+  - El ciclo completo de deep links: generar URL -> interpretarla de nuevo.
+  - La detección de imágenes en los adjuntos de un post.
+  - La persistencia y limpieza del token de sesión.
+
+Se detectó y corrigió durante el desarrollo un defecto real en el intérprete
+de deep links: Dart analiza "rooms4ums://post/abc123" colocando "post" en el
+host y no en la lista de segmentos, por lo que el parser inicial devolvia
+nulo en todas las URLs. La prueba automatizada de ida y vuelta del enlace es
+la que lo detectó.
+
+
+================================================================================
+8. LIMITACIONES CONOCIDAS
+================================================================================
+
+1. Las URLs de las fotografías siguen siendo públicas y sin caducidad
+   (ver 4.4). Requiere un cambio en el backend.
+
+2. La aplicación móvil envía los posts como JSON, no como
+   multipart/form-data. El backend espera archivos en el campo "files"
+   (FilesInterceptor), por lo que desde el móvil NO se pueden subir
+   imágenes. La web sí lo soporta.
+
+3. El canal de voz no está implementado en la aplicación móvil. Requiere un
+   cliente de WebSocket (socket_io_client) contra el gateway existente.
+
+4. La detección de eventos es por sondeo cada 45 segundos, no en tiempo real
+   (ver 3.2).
+
+5. No existe puente verificado entre Flutter y Wear OS. La integración actual
+   no lo requiere, porque el reflejo de notificaciones lo resuelve el sistema
+   operativo.
+
+
+================================================================================
+9. CÓMO REPRODUCIR LA DEMOSTRACIÓN
+================================================================================
+
+Requisito: un teléfono Android con Wear OS 3 o superior emparejado.
+
+  1. Compilar e instalar la aplicación:
+         flutter run
+         (o) flutter build apk --debug
+
+  2. Iniciar sesión en la aplicación móvil con una cuenta existente.
+
+  3. Aceptar el permiso de notificaciones cuando el sistema lo solicite.
+     Es obligatorio en Android 13 (API 33).
+
+  4. Publicar un post CON una imagen desde la aplicación web
+     (la web sí soporta la carga de archivos).
+
+  5. Esperar el intervalo de sondeo (máximo 45 segundos).
+
+  6. Verificar:
+       - El teléfono vibra y muestra la notificación con la fotografía.
+       - El reloj vibra y replica la notificación con la fotografía.
+       - Al tocar el aviso en cualquiera de los dos dispositivos, se abre
+         la aplicación en el detalle del post.
+
+================================================================================

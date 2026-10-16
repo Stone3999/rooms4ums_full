@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
@@ -229,6 +229,49 @@ class ApiService {
     } finally {
       if (client == null) httpClient.close();
     }
+  }
+
+  // --- Push remoto (tokens FCM) ---------------------------------------------
+
+  /// Asocia el token del dispositivo con el usuario autenticado.
+  /// Es idempotente: si el token ya existe, el backend lo actualiza.
+  static Future<void> registerPushToken(
+    String token, {
+    String platform = 'android',
+  }) async {
+    final jwt = await getToken();
+    if (jwt == null || token.isEmpty) return;
+
+    await _guard(() async {
+      final response = await http
+          .post(
+            _uri('/push/register'),
+            headers: {..._jsonHeaders, 'Authorization': 'Bearer $jwt'},
+            body: jsonEncode({'token': token, 'platform': platform}),
+          )
+          .timeout(_timeout);
+
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        throw Exception(_parseError(response));
+      }
+    }, 'No se pudo registrar el dispositivo para notificaciones.');
+  }
+
+  /// Da de baja el dispositivo para dejar de recibir push.
+  static Future<void> unregisterPushToken(String token) async {
+    final jwt = await getToken();
+    if (jwt == null || token.isEmpty) return;
+
+    await _guard(() async {
+      final response = await http
+          .delete(
+            _uri('/push/register'),
+            headers: {..._jsonHeaders, 'Authorization': 'Bearer $jwt'},
+            body: jsonEncode({'token': token}),
+          )
+          .timeout(_timeout);
+      if (response.statusCode != 200) throw Exception(_parseError(response));
+    }, 'No se pudo dar de baja el dispositivo.');
   }
 
   // --- Forum / Posts ---

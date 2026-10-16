@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Paleta tomada del diseño retro de la web (rooms4ums/src/styles) -->
+    <color name="fondo">#FF000000</color>
+    <color name="acento">#FFFF8C00</color>
+    <color name="texto">#FFFFFFFF</color>
+    <color name="texto_suave">#FF888888</color>
+    <color name="borde">#FF444444</color>
+</resources>

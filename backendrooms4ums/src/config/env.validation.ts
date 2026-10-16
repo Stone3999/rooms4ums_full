@@ -19,4 +19,12 @@ export const envValidationSchema = Joi.object({
 
   // Object Storage
   SUPABASE_BUCKET_NAME: Joi.string().default('avatars'),
+
+  // Firebase Cloud Messaging (push remoto).
+  // Ambos son opcionales: si faltan, el backend arranca igual y el push
+  // remoto simplemente queda deshabilitado (el push local sigue funcionando).
+  // En Render conviene usar FIREBASE_SERVICE_ACCOUNT_JSON porque no hay
+  // sistema de archivos persistente.
+  FIREBASE_SERVICE_ACCOUNT_PATH: Joi.string().allow('').optional(),
+  FIREBASE_SERVICE_ACCOUNT_JSON: Joi.string().allow('').optional(),
 });

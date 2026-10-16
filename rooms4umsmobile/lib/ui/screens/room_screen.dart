@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import 'package:rooms4ums_mobile/core/services/api_service.dart';
+import 'package:rooms4ums_mobile/core/services/new_post_watcher.dart';
 import 'package:rooms4ums_mobile/core/theme/app_colors.dart';
+import 'package:rooms4ums_mobile/data/local/local_database.dart';
 import 'package:rooms4ums_mobile/ui/screens/post_detail_screen.dart';
 import 'package:rooms4ums_mobile/ui/widgets/post_card.dart';
 
@@ -10,12 +12,14 @@ class RoomScreen extends StatefulWidget {
   final String roomId;
   final String roomName;
   final bool isInteractive;
+  final String? roomSlug;
 
   const RoomScreen({
     super.key,
     required this.roomId,
     required this.roomName,
     this.isInteractive = true,
+    this.roomSlug,
   });
 
   @override
@@ -26,22 +30,79 @@ class _RoomScreenState extends State<RoomScreen> {
   late Future<List<Map<String, dynamic>>> _postsFuture;
   bool _isLoggedIn = false;
 
+  /// PRÁCTICA 4: true cuando el contenido proviene de la caché local.
+  bool _isOffline = false;
+
   @override
   void initState() {
     super.initState();
-    _load();
+    _postsFuture = _fetchPosts();
     ApiService.getToken().then((token) {
-      if (mounted) setState(() => _isLoggedIn = token != null);
+      if (mounted) setState(() => _isLoggedIn = token != null && token.isNotEmpty);
     });
   }
 
   void _load() {
-    setState(() => _postsFuture = ApiService.getPosts(widget.roomId));
+    setState(() {
+      _postsFuture = _fetchPosts();
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchPosts() async {
+    // Red primero. Si falla, se sirve la caché local (PRÁCTICA 4).
+    setState(() => _isOffline = false);
+
+    try {
+      final posts = await _fetchFromNetwork();
+
+      if (posts.isNotEmpty) {
+        await LocalDatabase.instance.cachePosts(posts, roomId: _cacheKey);
+        // Lo que el usuario está viendo no debe generar push.
+        NewPostWatcher.instance.markAsSeen(
+          posts.map((p) => (p['_id'] ?? '').toString()).where((e) => e.isNotEmpty),
+        );
+      }
+
+      return posts;
+    } catch (e) {
+      final cached = await LocalDatabase.instance.cachedPosts(_cacheKey);
+      if (cached.isEmpty) rethrow;
+      if (mounted) setState(() => _isOffline = true);
+      return cached.map(LocalDatabase.postFromRow).toList();
+    }
+  }
+
+  /// La clave de caché incluye el slug alterno para no duplicar entradas.
+  String get _cacheKey => widget.roomSlug ?? widget.roomId;
+
+  Future<List<Map<String, dynamic>>> _fetchFromNetwork() async {
+    // Si la sala viene con slug o id, intentamos obtener los posts
+    try {
+      final posts = await ApiService.getPosts(widget.roomId);
+      if (posts.isNotEmpty) return posts;
+      // Si vino vacío y tenemos slug alternativo, intentamos con el slug
+      if (widget.roomSlug != null && widget.roomSlug != widget.roomId) {
+        return await ApiService.getPosts(widget.roomSlug!);
+      }
+      return posts;
+    } catch (e) {
+      // Reintentar con slug alterno si el primario falló
+      if (widget.roomSlug != null && widget.roomSlug != widget.roomId) {
+        try {
+          return await ApiService.getPosts(widget.roomSlug!);
+        } catch (_) {}
+      }
+      rethrow;
+    }
   }
 
   Future<void> _refresh() async {
-    setState(() => _postsFuture = ApiService.getPosts(widget.roomId));
-    await _postsFuture;
+    _load();
+    try {
+      await _postsFuture;
+    } catch (_) {
+      // El error ya se maneja dentro de _fetchPosts.
+    }
   }
 
   Future<void> _openComposer() async {
@@ -62,7 +123,7 @@ class _RoomScreenState extends State<RoomScreen> {
   }
 
   void _openPost(Map<String, dynamic> post) {
-    final postId = (post['_id'] ?? post['id'] ?? '').toString();
+    final postId = (post['_id'] ?? post['id'] ?? post['postId'] ?? '').toString();
     if (postId.isEmpty) return;
 
     Navigator.push(
@@ -102,6 +163,7 @@ class _RoomScreenState extends State<RoomScreen> {
               roomName: widget.roomName,
               isInteractive: widget.isInteractive,
               isLoggedIn: _isLoggedIn,
+              isOffline: _isOffline,
             ),
             Expanded(
               child: RefreshIndicator(
@@ -160,11 +222,13 @@ class _RoomBanner extends StatelessWidget {
   final String roomName;
   final bool isInteractive;
   final bool isLoggedIn;
+  final bool isOffline;
 
   const _RoomBanner({
     required this.roomName,
     required this.isInteractive,
     required this.isLoggedIn,
+    this.isOffline = false,
   });
 
   @override
@@ -186,17 +250,21 @@ class _RoomBanner extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              isLoggedIn
-                  ? 'SESIÓN ACTIVA · PUEDES PUBLICAR'
-                  : 'MODO INVITADO · SOLO LECTURA',
+              isOffline
+                  ? 'SIN CONEXIÓN · CACHÉ LOCAL'
+                  : isLoggedIn
+                      ? 'SESIÓN ACTIVA · PUEDES PUBLICAR'
+                      : 'MODO INVITADO · SOLO LECTURA',
               style: TextStyle(
-                color: isLoggedIn ? AppColors.accent : AppColors.textSecondary,
+                color: isOffline || isLoggedIn ? AppColors.accent : AppColors.textSecondary,
                 fontSize: 10,
                 letterSpacing: 1,
               ),
             ),
           ),
-          if (!isInteractive)
+          if (isOffline)
+            const Icon(Icons.cloud_off, size: 13, color: AppColors.accent)
+          else if (!isInteractive)
             const Text(
               'SALA NO INTERACTIVA',
               style: TextStyle(color: AppColors.textSecondary, fontSize: 9),

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'package:rooms4ums_mobile/core/services/api_service.dart';
+import 'package:rooms4ums_mobile/core/services/deep_link_service.dart';
 import 'package:rooms4ums_mobile/core/theme/app_colors.dart';
 import 'package:rooms4ums_mobile/ui/widgets/post_card.dart';
 
@@ -10,8 +12,14 @@ import 'package:rooms4ums_mobile/ui/widgets/post_card.dart';
 class PostDetailScreen extends StatefulWidget {
   final String postId;
   final Map<String, dynamic> preview;
+  final String? roomSlug;
 
-  const PostDetailScreen({super.key, required this.postId, required this.preview});
+  const PostDetailScreen({
+    super.key,
+    required this.postId,
+    required this.preview,
+    this.roomSlug,
+  });
 
   @override
   State<PostDetailScreen> createState() => _PostDetailScreenState();
@@ -31,7 +39,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _load();
+    _postFuture = ApiService.getPost(widget.postId);
+    _commentsFuture = ApiService.getComments(widget.postId);
     ApiService.getToken().then((token) {
       if (mounted) setState(() => _isLoggedIn = token != null);
     });
@@ -52,10 +61,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   }
 
   Future<void> _refresh() async {
-    setState(() {
-      _postFuture = ApiService.getPost(widget.postId);
-      _commentsFuture = ApiService.getComments(widget.postId);
-    });
+    _load();
     await Future.wait([_postFuture, _commentsFuture]);
   }
 
@@ -85,10 +91,35 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     }
   }
 
+  /// Genera la URL preasignada del post y la deja lista para compartir.
+  void _shareLink() {
+    final messenger = ScaffoldMessenger.of(context);
+    final roomSlug = widget.roomSlug ?? widget.preview['roomId']?.toString();
+    final link = DeepLinkService.shareLinkForPost(widget.postId, roomSlug: roomSlug);
+
+    Clipboard.setData(ClipboardData(text: link));
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('ENLACE COPIADO: $link', style: const TextStyle(fontSize: 10)),
+        duration: const Duration(seconds: 4),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('POST')),
+      appBar: AppBar(
+        title: const Text('POST'),
+        actions: [
+          // PRÁCTICA 3: expone la URL preasignada de este post.
+          IconButton(
+            tooltip: 'Copiar enlace',
+            icon: const Icon(Icons.link, size: 19),
+            onPressed: _shareLink,
+          ),
+        ],
+      ),
       body: SafeArea(
         child: Column(
           children: [
