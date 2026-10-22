@@ -42,6 +42,9 @@ testem.log
 Thumbs.db
 
 # --- Builds de subproyectos (el .gitignore raiz solo cubre la raiz) ---
+rooms4ums/dist/
+rooms4ums/node_modules/
+rooms4ums/.angular/
 backendrooms4ums/dist/
 backendrooms4ums/node_modules/
 rooms4umsmobile/build/

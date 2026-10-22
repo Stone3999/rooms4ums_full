@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "401794962867",
+    "project_id": "rooms4ums",
+    "storage_bucket": "rooms4ums.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:401794962867:android:3d34a550cb2f33acf6e7c6",
+        "android_client_info": {
+          "package_name": "com.rooms4ums.wear"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBSELBf81wpAMx05uNp7EG0B7C0-5MrxeU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:401794962867:android:8f05a47ebf503664f6e7c6",
+        "android_client_info": {
+          "package_name": "com.stone3999.rooms4ums_mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBSELBf81wpAMx05uNp7EG0B7C0-5MrxeU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

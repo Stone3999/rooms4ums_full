@@ -3,24 +3,34 @@ package com.rooms4ums.wear
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import android.view.View
+import android.widget.Button
+import android.widget.EditText
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import com.google.android.gms.wearable.Wearable
-import com.google.firebase.messaging.FirebaseMessaging
 
 /**
  * Actividad principal del reloj.
  *
  *  1. Pide el permiso de notificaciones (Android 13+ / Wear OS 3).
- *  2. Arranca el servicio de telemetria en primer plano  (PRACTICA 1).
- *  3. Muestra el estado del enlace con el telefono      (PRACTICA 2).
- *  4. Resuelve las URLs preasignadas de las notificaciones (PRACTICA 3).
+ *  2. Session: login propio contra el backend NestJS (mismo endpoint que
+ *     web y movil). Necesario para registrar el token FCM del reloj.
+ *  3. Arranca el servicio de telemetria en primer plano   (PRACTICA 1).
+ *  4. Muestra el estado del enlace con el telefono       (PRACTICA 2).
+ *  5. Resuelve las URLs preasignadas de las notificaciones (PRACTICA 3).
  */
 class MainActivity : AppCompatActivity() {
 
     private lateinit var statusText: TextView
     private lateinit var sensorText: TextView
+
+    private lateinit var loginPanel: View
+    private lateinit var userInput: EditText
+    private lateinit var passInput: EditText
+    private lateinit var loginButton: Button
+    private lateinit var loginMessage: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -28,15 +38,29 @@ class MainActivity : AppCompatActivity() {
 
         statusText = findViewById(R.id.status)
         sensorText = findViewById(R.id.sensores)
+        loginPanel = findViewById(R.id.login_panel)
+        userInput = findViewById(R.id.input_usuario)
+        passInput = findViewById(R.id.input_password)
+        loginButton = findViewById(R.id.btn_login)
+        loginMessage = findViewById(R.id.login_mensaje)
 
         requestNotificationPermission()
         startTelemetryService()
-
         checkPhoneConnection()
         handleDeepLink(intent)
 
-        // El token FCM se registra cuando ya hay un JWT disponible.
-        SharedPrefs.getJwt(this)?.let { jwt -> registerWearToken(jwt) }
+        // Si ya hay sesion, se omite el login y se registra el push.
+        if (WearSession.hasSession(this)) {
+            showLoginPanel(false)
+            statusText.text = getString(R.string.status_sesion_ok)
+            WearSession.registerPushToken(this) { result ->
+                Log.i(TAG, "Registro FCM: $result")
+            }
+        } else {
+            showLoginPanel(true)
+        }
+
+        loginButton.setOnClickListener { attemptLogin() }
 
         sensorText.postDelayed({ checkPhoneConnection() }, 5000)
     }
@@ -54,6 +78,38 @@ class MainActivity : AppCompatActivity() {
         val data = intent?.data ?: return
         Log.i(TAG, "Deep link recibido: $data")
         statusText.text = getString(R.string.status_deep_link, data.toString())
+    }
+
+    private fun attemptLogin() {
+        val identifier = userInput.text.toString().trim()
+        val password = passInput.text.toString()
+
+        if (identifier.isEmpty() || password.isEmpty()) {
+            loginMessage.text = getString(R.string.login_completar)
+            return
+        }
+
+        loginButton.isEnabled = false
+        loginMessage.text = getString(R.string.login_enviando)
+
+        WearSession.login(this, identifier, password) { ok, message ->
+            loginButton.isEnabled = true
+
+            if (ok) {
+                loginMessage.text = getString(R.string.login_exitoso)
+                showLoginPanel(false)
+                statusText.text = getString(R.string.status_sesion_ok)
+                WearSession.registerPushToken(this) { result ->
+                    Log.i(TAG, "Registro FCM tras login: $result")
+                }
+            } else {
+                loginMessage.text = getString(R.string.login_error, message)
+            }
+        }
+    }
+
+    private fun showLoginPanel(visible: Boolean) {
+        loginPanel.visibility = if (visible) View.VISIBLE else View.GONE
     }
 
     /** PRACTICA 1 - El servicio en primer plano mantiene los sensores vivos. */
@@ -81,25 +137,7 @@ class MainActivity : AppCompatActivity() {
                 sensorText.text = getString(R.string.status_sensores_activos)
             }
             .addOnFailureListener {
-                statusText.text = getString(R.string.status_error_enlace)
-            }
-    }
-
-    /**
-     * Registra el token FCM del reloj contra el mismo endpoint que usa el
-     * movil. Un solo envio del backend notifica a ambos dispositivos.
-     */
-    private fun registerWearToken(jwt: String) {
-        FirebaseMessaging.getInstance().token
-            .addOnSuccessListener { fcmToken ->
-                Log.i(TAG, "Token FCM del reloj: $fcmToken")
-                SharedPrefs.saveToken(this, fcmToken)
-                PushRegistration.send(applicationContext, fcmToken, jwt) { result ->
-                    Log.i(TAG, "Registro remoto del reloj: $result")
-                }
-            }
-            .addOnFailureListener {
-                Log.e(TAG, "No se pudo obtener el token del reloj: ${it.message}")
+                sensorText.text = getString(R.string.status_error_enlace)
             }
     }
 

@@ -5,6 +5,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 
 import 'package:rooms4ums_mobile/core/services/api_service.dart';
+import 'package:rooms4ums_mobile/core/services/new_post_watcher.dart';
 import 'package:rooms4ums_mobile/core/services/notification_service.dart';
 import 'package:rooms4ums_mobile/data/local/image_cache.dart';
 
@@ -115,34 +116,50 @@ class PushService {
     final postId = data['postId']?.toString();
     final roomSlug = data['room']?.toString();
 
+    // CRÍTICO: el push remoto y el sondeo local vigilan los mismos posts.
+    // Sin marcarlo como visto, el sondeo lo volvería a notificar 45 segundos
+    // después y el usuario vería el aviso duplicado.
+    if (postId != null && postId.isNotEmpty) {
+      NewPostWatcher.instance.markAsSeen([postId]);
+    }
+
     Uint8List? preview;
     final imageUrl = firstImageUrl(data);
     if (imageUrl != null) {
       preview = await ImageCacheService.instance.load(imageUrl);
     }
 
+    final link = _deepLinkFor(postId, roomSlug);
+
     await NotificationService.instance.showRemote(
       id: (postId ?? title).hashCode & 0x7fffffff,
       title: title,
       body: body,
-      deepLink: postId != null
-          ? 'rooms4ums://post/$postId${roomSlug != null ? '?room=$roomSlug' : ''}'
-          : null,
+      deepLink: link,
       imageBytes: preview,
     );
+  }
+
+  /// Construye la URL preasignada que viaja en el aviso y la deja en el log,
+  /// para poder comprobar la Práctica 3 desde el logcat.
+  static String? _deepLinkFor(String? postId, String? roomSlug) {
+    if (postId == null || postId.isEmpty) return null;
+    final query = roomSlug == null ? '' : '?room=$roomSlug';
+    final link = 'rooms4ums://post/$postId$query';
+    debugPrint('[PRACTICA 3] URL preasignada creada: $link');
+    return link;
   }
 
   /// El usuario tocó el aviso. Se delega el deep link al servicio central.
   void _handleOpenedMessage(RemoteMessage message) {
     final postId = message.data['postId']?.toString();
     final roomSlug = message.data['room']?.toString();
-    if (postId == null) return;
+    final link = _deepLinkFor(postId, roomSlug);
+    if (link == null) return;
 
     // Se reemite por el mismo canal que usa app_links, de modo que el
     // deep link se resuelve igual venga de donde venga.
-    NotificationService.instance.onDeepLinkRequested(
-      'rooms4ums://post/$postId${roomSlug != null ? '?room=$roomSlug' : ''}',
-    );
+    NotificationService.instance.onDeepLinkRequested(link);
   }
 
   void dispose() {

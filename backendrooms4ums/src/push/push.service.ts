@@ -53,12 +53,18 @@ export class PushService implements OnModuleInit {
    *   - FIREBASE_SERVICE_ACCOUNT_PATH: ruta al JSON descargado de Firebase.
    *   - FIREBASE_SERVICE_ACCOUNT_JSON: el JSON completo como texto. Es lo
    *     recomendado en Render, donde no hay sistema de archivos persistente.
+   *
+   * IMPORTANTE: el JSON que descarga Firebase usa notacion snake_case
+   * (project_id, client_email, private_key), pero la interfaz ServiceAccount
+   * de firebase-admin exige camelCase (projectId, clientEmail, privateKey).
+   * Sin esta normalizacion, cert() recibiria campos indefinidos y la
+   * autenticacion fallaria en tiempo de ejecucion.
    */
   private resolveCredentials(): ServiceAccount | null {
     const inline = this.configService.get<string>('FIREBASE_SERVICE_ACCOUNT_JSON');
     if (inline) {
       try {
-        return JSON.parse(inline) as ServiceAccount;
+        return this.normalize(JSON.parse(inline));
       } catch {
         this.logger.error('FIREBASE_SERVICE_ACCOUNT_JSON no contiene JSON valido');
         return null;
@@ -70,7 +76,7 @@ export class PushService implements OnModuleInit {
       try {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const fs = require('fs');
-        return JSON.parse(fs.readFileSync(path, 'utf8')) as ServiceAccount;
+        return this.normalize(JSON.parse(fs.readFileSync(path, 'utf8')));
       } catch (e: any) {
         this.logger.error(`No se pudo leer la credencial desde ${path}: ${e.message}`);
         return null;
@@ -78,6 +84,30 @@ export class PushService implements OnModuleInit {
     }
 
     return null;
+  }
+
+  /** Convierte un objeto snake_case del JSON de Firebase a camelCase. */
+  private normalize(raw: any): ServiceAccount | null {
+    if (!raw || typeof raw !== 'object') return null;
+
+    const projectId = raw.projectId ?? raw.project_id;
+    const clientEmail = raw.clientEmail ?? raw.client_email;
+    let privateKey = raw.privateKey ?? raw.private_key;
+
+    if (!projectId || !clientEmail || !privateKey) {
+      this.logger.error(
+        'La credencial de Firebase no contiene projectId/clientEmail/privateKey. ' +
+          'Revisa que el JSON sea el de una clave de servicio.',
+      );
+      return null;
+    }
+
+    // Si la clave privada trae saltos de linea literales escapados, se restauran.
+    if (privateKey.includes('\\n')) {
+      privateKey = privateKey.replace(/\\n/g, '\n');
+    }
+
+    return { projectId, clientEmail, privateKey };
   }
 
   get enabled(): boolean {

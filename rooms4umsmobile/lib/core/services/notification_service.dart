@@ -213,6 +213,12 @@ deepLink: 'rooms4ums://post/$postId?room=$roomSlug',
   }) async {
     if (!_initialized) return;
 
+    // Traza de la URL preasignada: deja visible en el logcat qué deep link
+    // viaja en el aviso, para poder verificar la Práctica 3 en caliente.
+    if (deepLink != null) {
+      debugPrint('[PRACTICA 3] Notificacion -> deep link: $deepLink');
+    }
+
     // Si hay imagen, usamos BigPictureStyle: Android la copia al reloj como
     // vista previa grande. Sin imagen, caemos a texto plano.
     final details = NotificationDetails(

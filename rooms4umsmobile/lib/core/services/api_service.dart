@@ -13,7 +13,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 class ApiService {
   static const String baseUrl = 'https://rooms4ums.onrender.com';
 
-  static const Duration _timeout = Duration(seconds: 20);
+  /// Render en plan gratuito hiberna tras 15 min sin uso. El primer request
+  /// tras el reposo tarda 30-90 s en despertar el contenedor, muy por encima
+  /// del timeout normal. Por eso el timeout es holgado y hay un reintento.
+  static const Duration _timeout = Duration(seconds: 30);
+
+  static const Duration _retryDelay = Duration(seconds: 3);
 
   static const Map<String, String> _jsonHeaders = {
     'Content-Type': 'application/json',
@@ -44,20 +49,35 @@ class ApiService {
     return 'Error ${response.statusCode} del servidor';
   }
 
-  /// Normaliza errores de red (timeout, sin conexión) a mensajes en español.
+/// Normaliza errores de red (timeout, sin conexión) a mensajes en español.
+  ///
+  /// Ante un fallo de red hace UN reintento tras una pausa breve, porque la
+  /// causa habitual en este proyecto es el arranque en frío de Render y no un
+  /// fallo real del servidor.
   static Future<T> _guard<T>(
     Future<T> Function() request,
-    String fallbackMessage,
-  ) async {
-    try {
-      return await request();
-    } on TimeoutException {
-      throw Exception('El servidor tardó demasiado en responder. Intenta de nuevo.');
-    } on http.ClientException {
-      throw Exception('No se pudo conectar con el servidor. Revisa tu conexión.');
-    } catch (e) {
-      if (e is Exception && e.toString().startsWith('Exception:')) rethrow;
-      throw Exception(fallbackMessage);
+    String fallbackMessage, {
+    bool retryOnNetworkError = true,
+  }) async {
+    for (var attempt = 0; ; attempt++) {
+      try {
+        return await request();
+      } on TimeoutException {
+        if (retryOnNetworkError && attempt == 0) {
+          await Future<void>.delayed(_retryDelay);
+          continue;
+        }
+        throw Exception('El servidor tardó demasiado en responder. Intenta de nuevo.');
+      } on http.ClientException {
+        if (retryOnNetworkError && attempt == 0) {
+          await Future<void>.delayed(_retryDelay);
+          continue;
+        }
+        throw Exception('No se pudo conectar con el servidor. Revisa tu conexión.');
+      } catch (e) {
+        if (e is Exception && e.toString().startsWith('Exception:')) rethrow;
+        throw Exception(fallbackMessage);
+      }
     }
   }
 

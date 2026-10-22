@@ -39,7 +39,10 @@ class DeepLinkService {
       );
 
       final initial = await _appLinks.getInitialLink();
-      if (initial != null) return parse(initial);
+      if (initial != null) {
+        debugPrint('[PRACTICA 3] App abierta desde URL preasignada: $initial');
+        return parse(initial);
+      }
     } catch (e) {
       debugPrint('[DeepLink] No se pudo inicializar: $e');
     }
@@ -50,10 +53,16 @@ class DeepLinkService {
   /// Es la operación inversa: de la app hacia el enlace compartible.
   static String shareLinkForPost(String postId, {String? roomSlug}) {
     final query = roomSlug == null ? '' : '?room=$roomSlug';
-    return '$scheme://post/$postId$query';
+    final link = '$scheme://post/$postId$query';
+    debugPrint('[PRACTICA 3] URL preasignada creada: $link');
+    return link;
   }
 
-  static String shareLinkForRoom(String slug) => '$scheme://room/$slug';
+  static String shareLinkForRoom(String slug) {
+    final link = '$scheme://room/$slug';
+    debugPrint('[PRACTICA 3] URL preasignada creada: $link');
+    return link;
+  }
 
   /// Convierte la URI cruda en una intención tipada de la app.
   static DeepLink? parse(Uri uri) {
@@ -93,7 +102,10 @@ class DeepLinkService {
 
   void _dispatch(Uri uri) {
     final link = parse(uri);
-    if (link != null) _controller.add(link);
+    if (link != null) {
+      debugPrint('[PRACTICA 3] URL preasignada recibida: $uri -> $link');
+      _controller.add(link);
+    }
   }
 
   void dispose() {

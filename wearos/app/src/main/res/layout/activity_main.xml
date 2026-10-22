@@ -14,14 +14,14 @@
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:gravity="center_horizontal"
-            android:padding="16dp">
+            android:padding="12dp">
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/app_name"
                 android:textColor="@color/acento"
-                android:textSize="18sp"
+                android:textSize="16sp"
                 android:textStyle="bold"
                 android:letterSpacing="0.12"
                 android:fontFamily="monospace" />
@@ -30,23 +30,79 @@
                 android:id="@+id/status"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
+                android:layout_marginTop="8dp"
                 android:gravity="center"
                 android:text="@string/status_iniciando"
                 android:textColor="@color/texto"
-                android:textSize="12sp"
+                android:textSize="11sp"
                 android:fontFamily="monospace" />
 
             <TextView
                 android:id="@+id/sensores"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
+                android:layout_marginTop="4dp"
                 android:gravity="center"
                 android:text="@string/status_sensores"
                 android:textColor="@color/texto_suave"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:fontFamily="monospace" />
+
+            <!-- Panel de sesion: se oculta si el reloj ya tiene JWT -->
+            <LinearLayout
+                android:id="@+id/login_panel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone"
+                android:layout_marginTop="8dp">
+
+                <EditText
+                    android:id="@+id/input_usuario"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="@string/login_usuario"
+                    android:textColor="@color/texto"
+                    android:textColorHint="@color/texto_suave"
+                    android:textSize="11sp"
+                    android:inputType="text"
+                    android:importantForAutofill="no"
+                    android:fontFamily="monospace" />
+
+                <EditText
+                    android:id="@+id/input_password"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:hint="@string/login_password"
+                    android:textColor="@color/texto"
+                    android:textColorHint="@color/texto_suave"
+                    android:textSize="11sp"
+                    android:inputType="textPassword"
+                    android:importantForAutofill="no"
+                    android:fontFamily="monospace" />
+
+                <Button
+                    android:id="@+id/btn_login"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="@string/login_entrar"
+                    android:textSize="11sp"
+                    android:backgroundTint="@color/acento"
+                    android:textColor="@color/fondo"
+                    android:fontFamily="monospace" />
+
+                <TextView
+                    android:id="@+id/login_mensaje"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:gravity="center"
+                    android:textSize="9sp"
+                    android:textColor="@color/texto_suave"
+                    android:fontFamily="monospace" />
+            </LinearLayout>
 
         </LinearLayout>
     </ScrollView>

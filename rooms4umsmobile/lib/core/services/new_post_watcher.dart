@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
@@ -73,7 +73,7 @@ class NewPostWatcher {
       if (_primeraCarga) {
         _primeraCarga = false;
         _seen.addAll(recent.map((p) => (p['_id'] ?? p['id'] ?? '').toString()).where((e) => e.isNotEmpty));
-        await LocalDatabase.instance.cachePosts(recent, roomId: 'recent');
+        await LocalDatabase.instance.cachePosts(recent);
         return;
       }
 
@@ -100,7 +100,7 @@ class NewPostWatcher {
         );
       }
 
-      await LocalDatabase.instance.cachePosts(ordered, roomId: 'recent');
+      await LocalDatabase.instance.cachePosts(ordered);
       debugPrint('[Watcher] ${ordered.length} post(s) nuevo(s) notificado(s)');
     } catch (e) {
       // Silencioso a propósito: un fallo de red no debe romper la app.

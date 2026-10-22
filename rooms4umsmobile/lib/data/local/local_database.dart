@@ -22,7 +22,10 @@ class LocalDatabase {
   static final LocalDatabase instance = LocalDatabase._();
 
   static const String _fileName = 'rooms4ums.db';
-  static const int _version = 1;
+
+  /// v2: `posts_cache.room_id` admite NULL para los posts del feed global
+  ///     (`/api/forum/recent`), que no pertenecen a ninguna sala concreta.
+  static const int _version = 2;
 
   /// Tiempo máximo que se considera fresco un registro cacheado.
   static const Duration roomsTtl = Duration(hours: 6);
@@ -40,38 +43,47 @@ class LocalDatabase {
       p.join(dir, _fileName),
       version: _version,
       onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
-      onCreate: (db, version) async {
-        await db.execute('''
-          CREATE TABLE rooms_cache (
-            id             TEXT PRIMARY KEY,
-            slug           TEXT NOT NULL,
-            name           TEXT NOT NULL,
-            description    TEXT,
-            icon           TEXT,
-            is_interactive INTEGER NOT NULL DEFAULT 0,
-            fetched_at     INTEGER NOT NULL
-          )
-        ''');
-
-        await db.execute('''
-          CREATE TABLE posts_cache (
-            id            TEXT PRIMARY KEY,
-            room_id       TEXT NOT NULL,
-            title         TEXT NOT NULL,
-            content       TEXT,
-            author_name   TEXT,
-            comment_count INTEGER NOT NULL DEFAULT 0,
-            view_count    INTEGER NOT NULL DEFAULT 0,
-            created_at    TEXT,
-            fetched_at    INTEGER NOT NULL,
-            FOREIGN KEY (room_id) REFERENCES rooms_cache (id)
-          )
-        ''');
-
-        await db.execute('CREATE INDEX idx_posts_room ON posts_cache (room_id, created_at DESC)');
-        await db.execute('CREATE INDEX idx_posts_fetched ON posts_cache (fetched_at)');
+      onCreate: (db, version) async => _createSchema(db),
+      // La caché es descartable: en una migración se reconstruye desde cero
+      // en lugar de arrastrar un esquema incompatible.
+      onUpgrade: (db, oldVersion, newVersion) async {
+        await db.execute('DROP TABLE IF EXISTS posts_cache');
+        await db.execute('DROP TABLE IF EXISTS rooms_cache');
+        await _createSchema(db);
       },
     );
+  }
+
+  Future<void> _createSchema(Database db) async {
+    await db.execute('''
+      CREATE TABLE rooms_cache (
+        id             TEXT PRIMARY KEY,
+        slug           TEXT NOT NULL,
+        name           TEXT NOT NULL,
+        description    TEXT,
+        icon           TEXT,
+        is_interactive INTEGER NOT NULL DEFAULT 0,
+        fetched_at     INTEGER NOT NULL
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE posts_cache (
+        id            TEXT PRIMARY KEY,
+        room_id       TEXT,
+        title         TEXT NOT NULL,
+        content       TEXT,
+        author_name   TEXT,
+        comment_count INTEGER NOT NULL DEFAULT 0,
+        view_count    INTEGER NOT NULL DEFAULT 0,
+        created_at    TEXT,
+        fetched_at    INTEGER NOT NULL,
+        FOREIGN KEY (room_id) REFERENCES rooms_cache (id) ON DELETE CASCADE
+      )
+    ''');
+
+    await db.execute('CREATE INDEX idx_posts_room ON posts_cache (room_id, created_at DESC)');
+    await db.execute('CREATE INDEX idx_posts_fetched ON posts_cache (fetched_at)');
   }
 
   Future<void> close() async {
@@ -123,7 +135,12 @@ class LocalDatabase {
 
   // --- Posts -----------------------------------------------------------------
 
-  Future<void> cachePosts(List<Map<String, dynamic>> posts, {required String roomId}) async {
+  /// Guarda posts en la caché.
+  ///
+  /// [roomId] identifica la sala. Puede ser `null` para el feed global de
+  /// posts recientes, que no pertenece a ninguna sala concreta; en ese caso la
+  /// llave foránea no aplica.
+  Future<void> cachePosts(List<Map<String, dynamic>> posts, {String? roomId}) async {
     final db = await database;
     final now = DateTime.now().millisecondsSinceEpoch;
 
@@ -148,12 +165,22 @@ class LocalDatabase {
           conflictAlgorithm: ConflictAlgorithm.replace,
         );
       }
-      // Poda: fuera los posts viejos de esta sala que ya no vinieron del servidor.
-      await txn.delete(
-        'posts_cache',
-        where: 'room_id = ? AND fetched_at < ?',
-        whereArgs: [roomId, now],
-      );
+
+      // Poda: fuera los posts que ya no vinieron del servidor. Si el alcance
+      // es una sala concreta se poda solo esa sala; si es el feed global, todos.
+      if (roomId != null) {
+        await txn.delete(
+          'posts_cache',
+          where: 'room_id = ? AND fetched_at < ?',
+          whereArgs: [roomId, now],
+        );
+      } else {
+        await txn.delete(
+          'posts_cache',
+          where: 'room_id IS NULL AND fetched_at < ?',
+          whereArgs: [now],
+        );
+      }
     });
   }
 
