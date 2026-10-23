@@ -4,6 +4,3 @@ plugins {
     // Procesa wearos/app/google-services.json (proyecto Firebase del reloj).
     id("com.google.gms.google-services") version "4.4.2" apply false
 }
-
-rootProject.name = "Rooms4umsWear"
-include(":app")

@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!--
-      Tema del wearable. Wear OS no admite los temas estándar de Android;
-      el nombre debe ser AppTheme y declararse en el manifiesto.
+      Tema del wearable. Debe ser un estilo (no un string): el manifiesto lo
+      referencia como @style/AppTheme y el sistema solo acepta un recurso de
+      tipo style en android:theme.
     -->
-    <string name="AppTheme">@android:style/Theme.DeviceDefault</string>
+    <style name="AppTheme" parent="@android:style/Theme.DeviceDefault" />
 </resources>

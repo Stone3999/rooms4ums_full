@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:rooms4ums_mobile/core/services/api_service.dart';
 import 'package:rooms4ums_mobile/core/services/deep_link_service.dart';
 import 'package:rooms4ums_mobile/core/theme/app_colors.dart';
+import 'package:rooms4ums_mobile/ui/screens/image_viewer_screen.dart';
 import 'package:rooms4ums_mobile/ui/widgets/post_card.dart';
 
 /// Detalle de un post con su hilo de comentarios.
@@ -102,6 +103,24 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       SnackBar(
         content: Text('ENLACE COPIADO: $link', style: const TextStyle(fontSize: 10)),
         duration: const Duration(seconds: 4),
+      ),
+    );
+  }
+
+  /// Abre un adjunto usando una URL preasignada nueva (nonce distinto).
+  void _openImage(int index, {String? previewUrl}) {
+    final link = DeepLinkService.shareLinkForImage(widget.postId, index);
+    final deepLink = DeepLinkService.handleRaw(link);
+    if (deepLink == null) return;
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ImageViewerScreen(
+          postId: widget.postId,
+          index: index,
+          deepLink: link,
+          previewUrl: previewUrl,
+        ),
       ),
     );
   }
@@ -220,19 +239,53 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                       ),
                       if (attachments is List && attachments.isNotEmpty) ...[
                         const SizedBox(height: 14),
-                        for (final attachment in attachments)
-                          if (attachment is Map && attachment['url'] != null)
+                        for (var i = 0; i < attachments.length; i++)
+                          if (attachments[i] is Map && attachments[i]['url'] != null)
                             Padding(
                               padding: const EdgeInsets.only(bottom: 10),
-                              child: ClipRRect(
-                                child: Image.network(
-                                  attachment['url'].toString(),
-                                  fit: BoxFit.contain,
-                                  errorBuilder: (_, _, _) => const Text(
-                                    'ADJUNTO NO DISPONIBLE',
-                                    style: TextStyle(color: AppColors.textSecondary, fontSize: 10),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  GestureDetector(
+                                    onTap: () => _openImage(
+                                      i,
+                                      previewUrl: attachments[i]['url'].toString(),
+                                    ),
+                                    child: ClipRRect(
+                                      child: Image.network(
+                                        attachments[i]['url'].toString(),
+                                        fit: BoxFit.contain,
+                                        errorBuilder: (_, _, _) => const Text(
+                                          'ADJUNTO NO DISPONIBLE',
+                                          style: TextStyle(color: AppColors.textSecondary, fontSize: 10),
+                                        ),
+                                      ),
+                                    ),
                                   ),
-                                ),
+                                  if (attachments[i]['type']
+                                          ?.toString()
+                                          .startsWith('image/') ??
+                                      false) ...[
+                                    const SizedBox(height: 6),
+                                    OutlinedButton.icon(
+                                      onPressed: () => _openImage(
+                                        i,
+                                        previewUrl: attachments[i]['url'].toString(),
+                                      ),
+                                      icon: const Icon(Icons.open_in_new, size: 13),
+                                      label: const Text(
+                                        'VER IMAGEN',
+                                        style: TextStyle(fontSize: 9, letterSpacing: 1),
+                                      ),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: AppColors.accent,
+                                        side: const BorderSide(color: AppColors.winBorder),
+                                        padding: const EdgeInsets.symmetric(vertical: 8),
+                                        shape: const RoundedRectangleBorder(),
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
                             ),
                       ],

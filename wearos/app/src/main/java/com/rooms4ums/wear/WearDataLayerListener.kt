@@ -1,7 +1,9 @@
 package com.rooms4ums.wear
 
 import android.util.Log
+import com.google.android.gms.wearable.DataEvent
 import com.google.android.gms.wearable.DataEventBuffer
+import com.google.android.gms.wearable.DataMapItem
 import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.WearableListenerService
 
@@ -52,18 +54,23 @@ class WearDataLayerListener : WearableListenerService() {
 
     override fun onDataChanged(dataEvents: DataEventBuffer) {
         // Telemetría de sensores publicada por TelemetryService.
-        while (dataEvents.hasNext()) {
-            val event = dataEvents.next()
-            if (event.type == TelemetryService.PATH_TELEMETRY) {
-                val map = event.dataMap
+        try {
+            for (event in dataEvents) {
+                if (event.type != DataEvent.TYPE_CHANGED) continue
+
+                val path = event.dataItem.uri.path ?: continue
+                if (path != TelemetryService.PATH_TELEMETRY) continue
+
+                val map = DataMapItem.fromDataItem(event.dataItem).dataMap
                 Log.i(
                     TAG,
-                    "Telemetría: magnitud=${map.get(TelemetryService.KEY_MAGNITUDE)} " +
-                        "bateria=${map.get(TelemetryService.KEY_BATTERY)}"
+                    "Telemetría: magnitud=${map.getFloat(TelemetryService.KEY_MAGNITUDE)} " +
+                        "bateria=${map.getInt(TelemetryService.KEY_BATTERY)}"
                 )
             }
+        } finally {
+            dataEvents.release()
         }
-        dataEvents.release()
     }
 
     companion object {
@@ -76,10 +83,10 @@ class WearDataLayerListener : WearableListenerService() {
 
 /** Publica notificaciones propias del módulo de wearable. */
 object Notify {
-    private const val CHANNEL_ID = "eventos"
+    private const val CHANNEL_ID = WearApplication.CHANNEL_EVENTS
 
     fun show(context: android.content.Context, text: String) {
-        val manager = context.getSystemService(android.app.NotificationManager::class.java)
+        val manager = context.getSystemService(android.app.NotificationManager::class.java) ?: return
 
         manager.createNotificationChannel(
             android.app.NotificationChannel(

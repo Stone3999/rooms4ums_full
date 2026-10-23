@@ -1,5 +1,6 @@
 package com.rooms4ums.wear
 
+import android.app.Activity
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -7,7 +8,6 @@ import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
-import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import com.google.android.gms.wearable.Wearable
 
@@ -21,7 +21,7 @@ import com.google.android.gms.wearable.Wearable
  *  4. Muestra el estado del enlace con el telefono       (PRACTICA 2).
  *  5. Resuelve las URLs preasignadas de las notificaciones (PRACTICA 3).
  */
-class MainActivity : AppCompatActivity() {
+class MainActivity : Activity() {
 
     private lateinit var statusText: TextView
     private lateinit var sensorText: TextView

@@ -8,8 +8,12 @@ import 'package:flutter/foundation.dart';
 /// A cada destino de la app se le asigna una URL estable y compartible:
 ///   `rooms4ums://room/<slug>`   ->  abre esa sala
 ///   `rooms4ums://post/<id>`     ->  abre ese post
+///   `rooms4ums://image/<id>/<n>?t=<nonce>` -> abre un adjunto del post
 ///   `rooms4ums://popular`       ->  abre la sección de populares
 ///   `rooms4ums://home`          ->  vuelve al inicio
+///
+/// La URL de imagen lleva un `t` (nonce) que se regenera cada vez que se
+/// quiere ver el adjunto, así la URL preasignada cambia en cada apertura.
 ///
 /// Estas URLs viajan como `payload` de las notificaciones, así que al tocar
 /// el aviso en el Wear OS el sistema abre la app en la pantalla correcta.
@@ -64,6 +68,27 @@ class DeepLinkService {
     return link;
   }
 
+  /// Genera la URL preasignada de un adjunto. El nonce `t` cambia en cada
+  /// llamada, por lo que la URL es distinta cada vez que se quiere ver.
+  static String shareLinkForImage(String postId, int index) {
+    final nonce = DateTime.now().millisecondsSinceEpoch;
+    final link = '$scheme://image/$postId/$index?t=$nonce';
+    debugPrint('[PRACTICA 3] URL preasignada creada: $link');
+    return link;
+  }
+
+  /// Procesa una URL recibida (desde el sistema o generada por la propia app).
+  static DeepLink? handleRaw(String raw) {
+    final uri = Uri.tryParse(raw);
+    if (uri == null) return null;
+
+    final link = parse(uri);
+    if (link != null) {
+      debugPrint('[PRACTICA 3] URL preasignada recibida: $uri -> $link');
+    }
+    return link;
+  }
+
   /// Convierte la URI cruda en una intención tipada de la app.
   static DeepLink? parse(Uri uri) {
     // OJO con esto: Dart parsea `rooms4ums://post/abc123` de forma distinta a
@@ -88,6 +113,16 @@ class DeepLinkService {
         if (segments.length < 2) return null;
         return DeepLinkPost(id: segments[1], roomSlug: uri.queryParameters['room']);
 
+      case 'image':
+        if (segments.length < 3) return null;
+        final index = int.tryParse(segments[2]);
+        if (index == null || index < 0) return null;
+        return DeepLinkImage(
+          postId: segments[1],
+          index: index,
+          nonce: uri.queryParameters['t'],
+        );
+
       case 'popular':
         return const DeepLinkPopular();
 
@@ -101,9 +136,8 @@ class DeepLinkService {
   }
 
   void _dispatch(Uri uri) {
-    final link = parse(uri);
+    final link = handleRaw(uri.toString());
     if (link != null) {
-      debugPrint('[PRACTICA 3] URL preasignada recibida: $uri -> $link');
       _controller.add(link);
     }
   }
@@ -152,4 +186,15 @@ class DeepLinkPost extends DeepLink {
 
   @override
   String toString() => 'DeepLinkPost($id)';
+}
+
+class DeepLinkImage extends DeepLink {
+  final String postId;
+  final int index;
+  final String? nonce;
+
+  const DeepLinkImage({required this.postId, required this.index, this.nonce});
+
+  @override
+  String toString() => 'DeepLinkImage($postId#$index, t=$nonce)';
 }

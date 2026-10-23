@@ -1,7 +1,8 @@
 /// <reference types="multer" />
 import { 
   Controller, Get, Post, Body, Param, Query, UseGuards, 
-  UseInterceptors, UploadedFiles, Request, NotFoundException, InternalServerErrorException, Logger
+  UseInterceptors, UploadedFiles, Request, NotFoundException, InternalServerErrorException,
+  BadRequestException, Logger
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { AuthGuard } from '@nestjs/passport';
@@ -29,6 +30,13 @@ export class ForumController {
     return this.postsService.findRecent(limit || 10);
   }
 
+  /// Diagnóstico del almacenamiento: bucket, tipo de clave y si es público.
+  /// Abrir en el navegador: /api/forum/storage/health
+  @Get('storage/health')
+  storageHealth() {
+    return this.storageService.health();
+  }
+
   @Get('rooms/:roomId/posts')
   getRoomPosts(
     @Param('roomId') roomId: string,
@@ -53,11 +61,13 @@ export class ForumController {
   ) {
     const { title, content, roomId, tags } = body;
     const attachments: { url: string; type: string; name: string }[] = [];
+    let uploadError: string | null = null;
 
     if (files && files.length > 0) {
       for (const file of files) {
         try {
-          const path = `forum/${Date.now()}-${file.originalname}`;
+          const safeName = file.originalname.replace(/[^\w.\-]+/g, '_');
+          const path = `forum/${Date.now()}-${safeName}`;
           await this.storageService.uploadFile(file.buffer, path, file.mimetype);
           const url = this.storageService.getFileUrl(path);
           attachments.push({
@@ -66,9 +76,17 @@ export class ForumController {
             name: file.originalname,
           });
         } catch (storageError: any) {
+          if (!uploadError) uploadError = storageError.message;
           this.logger.error(`Error subiendo archivo ${file.originalname}: ${storageError.message}`);
-          // Continuamos para intentar guardar el post aunque falle la imagen
         }
+      }
+
+      // Si el usuario adjuntó archivos y NINGUNO se pudo subir, guardar el
+      // post sin imágenes solo confunde. Se devuelve el motivo real.
+      if (attachments.length === 0) {
+        throw new BadRequestException(
+          `No se pudo subir ningún archivo. ${uploadError ?? 'Revisa la configuración de Storage.'}`,
+        );
       }
     }
 

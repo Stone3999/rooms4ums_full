@@ -125,16 +125,24 @@ class TelemetryService : Service(), SensorEventListener {
 
                 Wearable.getDataClient(this@TelemetryService).putDataItem(request)
 
-                val message = RequestMessage.Builder(PATH_TELEMETRY).apply {
-                    map.putLong(KEY_TIMESTAMP, at)
-                    map.putFloat(KEY_MAGNITUDE, magnitude)
-                    map.putBoolean(KEY_ROTATED, rotated)
-                    map.putInt(KEY_BATTERY, batteryPercent())
-                }.build()
-
-                Wearable.getMessageClient(this@TelemetryService).sendMessage(
-                    message.nodeId, message.path, message.data
+                // Message API: a diferencia del Data Layer, un mensaje NO se
+                // encola. Solo tiene sentido si hay un nodo conectado ahora.
+                val nodes = com.google.android.gms.tasks.Tasks.await(
+                    Wearable.getNodeClient(this@TelemetryService).connectedNodes,
+                    NODE_TIMEOUT_SECONDS,
+                    java.util.concurrent.TimeUnit.SECONDS
                 )
+                val node = nodes.firstOrNull() ?: return@launch
+
+                val payload = com.google.android.gms.wearable.DataMap().apply {
+                    putLong(KEY_TIMESTAMP, at)
+                    putFloat(KEY_MAGNITUDE, magnitude)
+                    putBoolean(KEY_ROTATED, rotated)
+                    putInt(KEY_BATTERY, batteryPercent())
+                }.toByteArray()
+
+                Wearable.getMessageClient(this@TelemetryService)
+                    .sendMessage(node.id, PATH_TELEMETRY, payload)
             } catch (e: Exception) {
                 // El reloj puede estar lejos del teléfono: Data Layer lo encola.
                 logLine("Data Layer no disponible: ${e.message}")
@@ -189,7 +197,7 @@ class TelemetryService : Service(), SensorEventListener {
 
     companion object {
         private const val TAG = "Rooms4umsTelemetry"
-        private const val CHANNEL_ID = "telemetria"
+        private const val CHANNEL_ID = WearApplication.CHANNEL_TELEMETRY
         private const val NOTIFICATION_ID = 1001
 
         const val PATH_TELEMETRY = "/rooms4ums/telemetry"
@@ -205,5 +213,6 @@ class TelemetryService : Service(), SensorEventListener {
         private const val SAMPLE_PERIOD_US = 1_000_000   // 1 Hz
         private const val PUBLISH_EVERY = 1              // publicar cada muestra
         private const val ROTATION_THRESHOLD = 12.0f      // m/s^2, umbral de giro
+        private const val NODE_TIMEOUT_SECONDS = 3L      // espera máxima por un nodo
     }
 }

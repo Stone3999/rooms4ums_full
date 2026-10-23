@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:rooms4ums_mobile/core/services/api_service.dart';
 import 'package:rooms4ums_mobile/core/services/deep_link_service.dart';
+import 'package:rooms4ums_mobile/ui/screens/image_viewer_screen.dart';
 import 'package:rooms4ums_mobile/ui/screens/popular_screen.dart';
 import 'package:rooms4ums_mobile/ui/screens/post_detail_screen.dart';
 import 'package:rooms4ums_mobile/ui/screens/room_screen.dart';
@@ -16,6 +17,7 @@ class AppRouter {
 
   static const String postPath = 'post';
   static const String roomPath = 'room';
+  static const String imagePath = 'image';
 
   /// Navega según la intención derivada de la URL.
   static void route(NavigatorState navigator, DeepLink link, {bool replace = false}) {
@@ -47,6 +49,11 @@ class AppRouter {
         builder: (_) => roomSlug == null
             ? _PostWithoutPreview(postId: id)
             : PostDetailScreen(postId: id, preview: const {}),
+      ),
+
+      // PRÁCTICA 3: la URL de un adjunto abre el visor directamente.
+      DeepLinkImage(:final postId, :final index) => MaterialPageRoute(
+        builder: (_) => ImageViewerScreen(postId: postId, index: index),
       ),
     };
   }

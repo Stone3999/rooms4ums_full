@@ -1,6 +1,9 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    // Procesa wearos/app/google-services.json. Sin este plugin el archivo se
+    // ignora, FirebaseApp no se inicializa y FirebaseMessaging lanza.
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -45,4 +48,10 @@ dependencies {
     // PRÁCTICA 3 - Push remoto: el reloj registra su propio token FCM
     implementation(platform("com.google.firebase:firebase-bom:33.1.2"))
     implementation("com.google.firebase:firebase-messaging")
+
+    // Cliente HTTP del login propio y del registro del token
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+    // Telemetría y registro del token fuera del hilo principal
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 }

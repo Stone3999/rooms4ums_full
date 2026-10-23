@@ -104,6 +104,6 @@ class WearPushMessagingService : FirebaseMessagingService() {
 
     companion object {
         private const val TAG = "Rooms4umsWearPush"
-        private const val CHANNEL_ID = "rooms4ums_remoto"
+        private const val CHANNEL_ID = WearApplication.CHANNEL_REMOTE
     }
 }

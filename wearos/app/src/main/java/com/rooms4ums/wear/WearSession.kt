@@ -98,41 +98,30 @@ object WearSession {
     fun registerPushToken(context: Context, onResult: (String) -> Unit) {
         val jwt = SharedPrefs.getJwt(context)
         if (jwt.isNullOrEmpty()) {
-            onResult("sin sesion")
+            post { onResult("sin sesion") }
             return
         }
 
-        Thread {
-            try {
-                com.google.firebase.messaging.FirebaseMessaging.getInstance().token
-                    .addOnSuccessListener { fcmToken ->
-                        SharedPrefs.saveToken(context, fcmToken)
-
-                        val body = JSONObject().apply {
-                            put("token", fcmToken)
-                            put("platform", "wearos")
-                        }.toString()
-
-                        val request = Request.Builder()
-                            .url("$BASE_URL/api/push/register")
-                            .addHeader("Authorization", "Bearer $jwt")
-                            .post(body.toRequestBody(jsonMedia))
-                            .build()
-
-                        client.newCall(request).execute().use { response ->
-                            Log.i(TAG, "Token del reloj registrado: HTTP ${response.code}")
-                            post { onResult("HTTP ${response.code}") }
-                        }
+        try {
+            // El listener de la Task se ejecuta en el HILO PRINCIPAL. Por eso
+            // aquí no se puede hacer red: la petición la hace PushRegistration,
+            // que corre sobre Dispatchers.IO.
+            com.google.firebase.messaging.FirebaseMessaging.getInstance().token
+                .addOnSuccessListener { fcmToken ->
+                    SharedPrefs.saveToken(context, fcmToken)
+                    PushRegistration.send(context, fcmToken, jwt) { result ->
+                        post { onResult(result) }
                     }
-                    .addOnFailureListener {
-                        Log.e(TAG, "No se pudo obtener el token FCM: ${it.message}")
-                        post { onResult("sin token FCM") }
-                    }
-            } catch (e: Exception) {
-                Log.e(TAG, "No se pudo registrar el token: ${e.message}")
-                post { onResult("error: ${e.message}") }
-            }
-        }.start()
+                }
+                .addOnFailureListener {
+                    Log.e(TAG, "No se pudo obtener el token FCM: ${it.message}")
+                    post { onResult("sin token FCM") }
+                }
+        } catch (e: Exception) {
+            // Ocurre si google-services.json no se procesó (FirebaseApp nulo).
+            Log.e(TAG, "Firebase no inicializado: ${e.message}")
+            post { onResult("firebase no inicializado") }
+        }
     }
 
     /** Ejecuta en el hilo principal: la UI solo puede tocarse desde ahi. */
