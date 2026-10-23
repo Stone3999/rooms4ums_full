@@ -1,120 +1,88 @@
 package com.rooms4ums.wear
 
 import android.app.Activity
+import android.content.Intent
+import android.content.SharedPreferences
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
-import android.view.View
-import android.widget.Button
-import android.widget.EditText
 import android.widget.TextView
 import androidx.core.app.ActivityCompat
 import com.google.android.gms.wearable.Wearable
 
 /**
- * Actividad principal del reloj.
+ * Actividad principal del reloj. NO tiene login: la sesión llega desde el
+ * celular por el Data Layer cuando el usuario pulsa "CONECTAR WEARABLE".
  *
  *  1. Pide el permiso de notificaciones (Android 13+ / Wear OS 3).
- *  2. Session: login propio contra el backend NestJS (mismo endpoint que
- *     web y movil). Necesario para registrar el token FCM del reloj.
- *  3. Arranca el servicio de telemetria en primer plano   (PRACTICA 1).
- *  4. Muestra el estado del enlace con el telefono       (PRACTICA 2).
- *  5. Resuelve las URLs preasignadas de las notificaciones (PRACTICA 3).
+ *  2. Arranca el servicio de telemetría en primer plano (PRÁCTICA 1).
+ *  3. Muestra el estado del enlace con el teléfono (PRÁCTICA 2).
+ *  4. Muestra si la sesión ya fue vinculada y el push quedó activo.
+ *  5. Resuelve las URLs preasignadas de las notificaciones (PRÁCTICA 3).
  */
 class MainActivity : Activity() {
 
     private lateinit var statusText: TextView
+    private lateinit var sessionText: TextView
     private lateinit var sensorText: TextView
 
-    private lateinit var loginPanel: View
-    private lateinit var userInput: EditText
-    private lateinit var passInput: EditText
-    private lateinit var loginButton: Button
-    private lateinit var loginMessage: TextView
+    /** Se dispara cuando el servicio guarda el JWT que mandó el celular. */
+    private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == SharedPrefs.KEY_JWT) updateSessionStatus()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
         statusText = findViewById(R.id.status)
+        sessionText = findViewById(R.id.sesion)
         sensorText = findViewById(R.id.sensores)
-        loginPanel = findViewById(R.id.login_panel)
-        userInput = findViewById(R.id.input_usuario)
-        passInput = findViewById(R.id.input_password)
-        loginButton = findViewById(R.id.btn_login)
-        loginMessage = findViewById(R.id.login_mensaje)
 
         requestNotificationPermission()
         startTelemetryService()
         checkPhoneConnection()
         handleDeepLink(intent)
-
-        // Si ya hay sesion, se omite el login y se registra el push.
-        if (WearSession.hasSession(this)) {
-            showLoginPanel(false)
-            statusText.text = getString(R.string.status_sesion_ok)
-            WearSession.registerPushToken(this) { result ->
-                Log.i(TAG, "Registro FCM: $result")
-            }
-        } else {
-            showLoginPanel(true)
-        }
-
-        loginButton.setOnClickListener { attemptLogin() }
-
-        sensorText.postDelayed({ checkPhoneConnection() }, 5000)
+        updateSessionStatus()
     }
 
-    override fun onNewIntent(intent: android.content.Intent) {
+    override fun onResume() {
+        super.onResume()
+        SharedPrefs.prefs(this).registerOnSharedPreferenceChangeListener(prefsListener)
+        updateSessionStatus()
+    }
+
+    override fun onPause() {
+        SharedPrefs.prefs(this).unregisterOnSharedPreferenceChangeListener(prefsListener)
+        super.onPause()
+    }
+
+    override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleDeepLink(intent)
     }
 
     /**
-     * PRACTICA 3 - Si el usuario toca la notificacion, la URL preasignada
+     * PRÁCTICA 3 - Si el usuario toca la notificación, la URL preasignada
      * llega como Intent data.
      */
-    private fun handleDeepLink(intent: android.content.Intent?) {
+    private fun handleDeepLink(intent: Intent?) {
         val data = intent?.data ?: return
         Log.i(TAG, "Deep link recibido: $data")
         statusText.text = getString(R.string.status_deep_link, data.toString())
     }
 
-    private fun attemptLogin() {
-        val identifier = userInput.text.toString().trim()
-        val password = passInput.text.toString()
-
-        if (identifier.isEmpty() || password.isEmpty()) {
-            loginMessage.text = getString(R.string.login_completar)
-            return
-        }
-
-        loginButton.isEnabled = false
-        loginMessage.text = getString(R.string.login_enviando)
-
-        WearSession.login(this, identifier, password) { ok, message ->
-            loginButton.isEnabled = true
-
-            if (ok) {
-                loginMessage.text = getString(R.string.login_exitoso)
-                showLoginPanel(false)
-                statusText.text = getString(R.string.status_sesion_ok)
-                WearSession.registerPushToken(this) { result ->
-                    Log.i(TAG, "Registro FCM tras login: $result")
-                }
-            } else {
-                loginMessage.text = getString(R.string.login_error, message)
-            }
-        }
+    /** La sesión la escribe el WearDataLayerListener cuando el celular vincula. */
+    private fun updateSessionStatus() {
+        val linked = WearSession.hasSession(this)
+        sessionText.text = getString(
+            if (linked) R.string.status_sesion_ok else R.string.status_esperando_vinculo
+        )
     }
 
-    private fun showLoginPanel(visible: Boolean) {
-        loginPanel.visibility = if (visible) View.VISIBLE else View.GONE
-    }
-
-    /** PRACTICA 1 - El servicio en primer plano mantiene los sensores vivos. */
+    /** PRÁCTICA 1 - El servicio en primer plano mantiene los sensores vivos. */
     private fun startTelemetryService() {
-        val service = android.content.Intent(this, TelemetryService::class.java)
+        val service = Intent(this, TelemetryService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(service)
         } else {
@@ -123,8 +91,8 @@ class MainActivity : Activity() {
     }
 
     /**
-     * PRACTICA 2 - Comprueba si hay un telefono emparejado y en alcance.
-     * Si `connectedNodes` viene vacio, el enlace BLE no esta activo.
+     * PRÁCTICA 2 - Comprueba si hay un teléfono emparejado y en alcance.
+     * Si `connectedNodes` viene vacío, el enlace BLE no está activo.
      */
     private fun checkPhoneConnection() {
         Wearable.getNodeClient(this).connectedNodes

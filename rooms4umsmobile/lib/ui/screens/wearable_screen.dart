@@ -361,12 +361,11 @@ class _WearableScreenState extends State<WearableScreen> {
           Text('COMO CONECTARLO', style: TextStyle(color: AppColors.accent, fontSize: 9, letterSpacing: 1)),
           SizedBox(height: 8),
           Text(
-            '1. Instala la app del reloj y ábrela una vez.\n'
-            '2. Con un reloj real, emparéjalo con el celular desde Wear OS.\n'
-            '3. Con emuladores, usa Android Studio > Device Manager para crear el par teléfono + reloj, o el asistente de emparejamiento del emulador.\n'
-            '4. Vuelve aquí: el nodo aparece como CERCA.\n'
-            '5. Pulsa CONECTAR WEARABLE: el reloj recibe tu sesión y registra su token FCM.\n'
-            '6. Publica desde otra cuenta y el aviso llegará al celular y al reloj.',
+            '1. Instala la app del reloj y ábrela una vez (no tiene login).\n'
+            '2. Empareja el reloj desde la app Wear OS del celular. Si el reloj es un emulador, usa "Pair with emulator" en esa misma app.\n'
+            '3. Vuelve aquí: el nodo aparece como CERCA.\n'
+            '4. Pulsa CONECTAR WEARABLE: el reloj recibe tu sesión y registra su token FCM.\n'
+            '5. Publica desde otra cuenta y el aviso llegará al celular y al reloj.',
             style: TextStyle(color: AppColors.textSecondary, fontSize: 9, height: 1.6),
           ),
         ],

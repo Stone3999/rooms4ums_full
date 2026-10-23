@@ -9,13 +9,6 @@
     <string name="status_sensores">ESPERANDO SENSORES...</string>
     <string name="status_sensores_activos">SENSORES ACTIVOS - 1 Hz</string>
     <string name="status_deep_link">ABRIENDO: %1$s</string>
-    <string name="status_sesion_ok">SESION ACTIVA</string>
-
-    <string name="login_usuario">USUARIO</string>
-    <string name="login_password">CLAVE</string>
-    <string name="login_entrar">ENTRAR</string>
-    <string name="login_completar">COMPLETA USUARIO Y CLAVE</string>
-    <string name="login_enviando">CONECTANDO...</string>
-    <string name="login_exitoso">SESION INICIADA</string>
-    <string name="login_error">ERROR: %1$s</string>
+    <string name="status_sesion_ok">SESION VINCULADA - PUSH ACTIVO</string>
+    <string name="status_esperando_vinculo">ESPERANDO VINCULACION DESDE EL CELULAR</string>
 </resources>
