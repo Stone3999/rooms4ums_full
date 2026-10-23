@@ -59,4 +59,8 @@ dependencies {
     // Biblioteca de soporte para el desugaring. Debe ir en `dependencies`,
     // no en `compileOptions`.
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+
+    // PRÁCTICA 2 - IoT: Data Layer API para descubrir el reloj, mandarle la
+    // sesión y leer su telemetría (canal BLE de Google Play Services).
+    implementation("com.google.android.gms:play-services-wearable:18.1.0")
 }

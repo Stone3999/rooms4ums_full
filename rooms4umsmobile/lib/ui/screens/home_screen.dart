@@ -5,7 +5,6 @@ import 'package:rooms4ums_mobile/core/services/new_post_watcher.dart';
 import 'package:rooms4ums_mobile/core/theme/app_colors.dart';
 import 'package:rooms4ums_mobile/data/local/local_database.dart';
 import 'package:rooms4ums_mobile/ui/screens/landing_screen.dart';
-import 'package:rooms4ums_mobile/ui/screens/popular_screen.dart';
 import 'package:rooms4ums_mobile/ui/screens/room_screen.dart';
 import 'package:rooms4ums_mobile/ui/widgets/door_card.dart';
 
@@ -124,14 +123,6 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: const Text('ROOMS4UMS'),
         actions: [
-          IconButton(
-            tooltip: 'Posts populares',
-            icon: const Icon(Icons.local_fire_department, size: 19),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const PopularScreen()),
-            ),
-          ),
           IconButton(
             tooltip: 'Actualizar salas',
             icon: const Icon(Icons.refresh),

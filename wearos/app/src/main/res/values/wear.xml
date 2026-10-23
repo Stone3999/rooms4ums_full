@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      PRÁCTICA 2: capability que anuncia esta app al Data Layer.
+      El celular la busca con CapabilityClient para saber si el reloj tiene
+      Rooms4ums instalado antes de intentar vincularlo.
+    -->
+    <string-array name="android_wear_capabilities">
+        <item>rooms4ums_wear</item>
+    </string-array>
+</resources>

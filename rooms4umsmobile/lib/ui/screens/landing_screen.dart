@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:rooms4ums_mobile/core/services/api_service.dart';
 import 'package:rooms4ums_mobile/core/services/deep_link_service.dart';
-import 'package:rooms4ums_mobile/ui/screens/home_screen.dart';
+import 'package:rooms4ums_mobile/ui/navigation/main_shell.dart';
 import 'package:rooms4ums_mobile/ui/screens/login_screen.dart';
 import 'package:rooms4ums_mobile/ui/screens/register_screen.dart';
 
@@ -38,7 +38,7 @@ class _LandingScreenState extends State<LandingScreen> {
     if (!mounted) return;
 
     if (hasSession) {
-      _goTo(const HomeScreen());
+      _goTo(const MainShell());
 
       // Con sesión activa: arrancar el monitoreo de posts nuevos (push)
       // y pedir el permiso de notificaciones en Android 13+.
@@ -127,7 +127,7 @@ class _LandingScreenState extends State<LandingScreen> {
                   const _DividerRow(),
                   const SizedBox(height: 12),
                   TextButton(
-                    onPressed: () => _goTo(const HomeScreen()),
+                    onPressed: () => _goTo(const MainShell()),
                     child: const Text(
                       'ENTRAR COMO INVITADO · VER POSTS',
                       style: TextStyle(

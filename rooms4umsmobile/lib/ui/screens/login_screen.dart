@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:rooms4ums_mobile/core/services/api_service.dart';
 import 'package:rooms4ums_mobile/core/services/push_service.dart';
 import 'package:rooms4ums_mobile/core/theme/app_colors.dart';
-import 'package:rooms4ums_mobile/ui/screens/home_screen.dart';
+import 'package:rooms4ums_mobile/ui/navigation/main_shell.dart';
 import 'package:rooms4ums_mobile/ui/widgets/auth_form_scaffold.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -46,7 +46,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        MaterialPageRoute(builder: (_) => const MainShell()),
         (route) => false,
       );
 

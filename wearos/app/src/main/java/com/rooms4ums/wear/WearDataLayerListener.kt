@@ -6,6 +6,7 @@ import com.google.android.gms.wearable.DataEventBuffer
 import com.google.android.gms.wearable.DataMapItem
 import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.WearableListenerService
+import org.json.JSONObject
 
 /**
  * PRÁCTICA 2 - ConexIÓN IoT.
@@ -32,6 +33,28 @@ class WearDataLayerListener : WearableListenerService() {
         Log.i(TAG, "Mensaje del teléfono: $path")
 
         when (path) {
+            PATH_LINK -> {
+                // El celular manda su JWT al vincular el reloj. Con la sesión
+                // guardada, el reloj registra su PROPIO token FCM y empieza a
+                // recibir los mismos pushes que el teléfono.
+                val raw = messageEvent.data.toString(Charsets.UTF_8)
+                val json = runCatching { JSONObject(raw) }.getOrNull()
+                val jwt = json?.optString("jwt").orEmpty()
+                val username = json?.optString("username").orEmpty()
+
+                if (jwt.isEmpty()) {
+                    Log.e(TAG, "Vinculacion sin JWT")
+                    Notify.show(this, "Vinculacion invalida")
+                } else {
+                    SharedPrefs.saveJwt(this, jwt)
+                    Log.i(TAG, "Sesion vinculada desde el celular: $username")
+                    WearSession.registerPushToken(this) { result ->
+                        Log.i(TAG, "Token FCM tras vinculacion: $result")
+                    }
+                    Notify.show(this, "Vinculado a ${username.ifEmpty { "tu cuenta" }}")
+                }
+            }
+
             PATH_OPEN_ROOM -> {
                 val slug = messageEvent.data.toString(Charsets.UTF_8)
                 Log.i(TAG, "Solicitud de abrir sala: $slug")
@@ -76,6 +99,7 @@ class WearDataLayerListener : WearableListenerService() {
     companion object {
         private const val TAG = "Rooms4umsDataLayer"
 
+        const val PATH_LINK = "/rooms4ums/link"
         const val PATH_OPEN_ROOM = "/rooms4ums/open-room"
         const val PATH_POST_CREATED = "/rooms4ums/post-created"
     }
