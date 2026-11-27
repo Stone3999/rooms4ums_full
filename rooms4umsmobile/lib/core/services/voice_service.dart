@@ -384,6 +384,13 @@ class VoiceService extends ChangeNotifier {
         });
       }
     };
+    peer.onIceConnectionState = (state) {
+      debugPrint('[VOICE] ICE $id: $state');
+      if (state == RTCIceConnectionState.RTCIceConnectionStateFailed) {
+        error = 'No se pudo conectar directamente; esta red puede requerir un servidor TURN.';
+        notifyListeners();
+      }
+    };
     peer.onRenegotiationNeeded = () {
       if (_negotiatingPeers.contains(id)) return;
       _negotiate(id, peer).catchError((Object cause) {
@@ -392,6 +399,9 @@ class VoiceService extends ChangeNotifier {
       });
     };
     peer.onTrack = (event) {
+      debugPrint(
+        '[VOICE] Track remoto ${event.track.kind} de $id; streams=${event.streams.length}',
+      );
       _attachRemoteTrack(id, event).catchError((Object cause) {
         error = 'No se pudo mostrar el audio o la pantalla compartida.';
         notifyListeners();

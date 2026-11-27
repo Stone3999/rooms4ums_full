@@ -26,22 +26,6 @@ import { LanguageService } from '../../core/services/language.service';
           <textarea [(ngModel)]="postData.content" (ngModelChange)="resetSubmissionKey()" class="win-input" rows="6" placeholder="¿Qué estás pensando?"></textarea>
         </div>
 
-        <div class="field">
-          <label>{{ langService.translate('ATTACHMENTS') }} (Max 5)</label>
-          <div class="file-upload-zone" (click)="fileInput.click()">
-            <i class="pixelart-icons-font-cloud-upload"></i>
-            <span>{{ selectedFiles.length > 0 ? selectedFiles.length + ' archivos seleccionados' : 'Click para subir archivos (PNG, JPG, PDF, ZIP)' }}</span>
-            <input #fileInput type="file" multiple (change)="onFileSelected($event)" style="display: none" accept="image/*,.pdf,.zip">
-          </div>
-          
-          <div class="files-preview" *ngIf="selectedFiles.length > 0">
-            <div *ngFor="let file of selectedFiles; let i = index" class="file-item win-panel">
-              <span class="file-name">{{ file.name }}</span>
-              <button class="win-button mini" (click)="removeFile(i)">X</button>
-            </div>
-          </div>
-        </div>
-
         <div class="form-actions">
           <button class="win-button" (click)="onCancel.emit()">{{ langService.translate('CANCEL') }}</button>
           <button class="win-button accent" [disabled]="isSubmitting() || !postData.title || !postData.content" (click)="submit()">
@@ -63,18 +47,6 @@ import { LanguageService } from '../../core/services/language.service';
     .field { display: flex; flex-direction: column; gap: 5px; flex-shrink: 0; }
     .field label { font-size: 0.7rem; font-weight: bold; color: var(--accent-color); }
     
-    .file-upload-zone {
-      border: 2px dashed #444; padding: 20px; text-align: center; cursor: pointer;
-      display: flex; flex-direction: column; align-items: center; gap: 10px; transition: 0.2s;
-    }
-    .file-upload-zone:hover { border-color: var(--accent-color); background: #111; }
-    .file-upload-zone i { font-size: 2rem; color: var(--accent-color); }
-    .file-upload-zone span { font-size: 0.75rem; }
-
-    .files-preview { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
-    .file-item { padding: 5px 10px; display: flex; align-items: center; gap: 10px; background: #111; font-size: 0.7rem; }
-    .file-name { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
     .form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px; }
     textarea { resize: vertical; }
 
@@ -95,40 +67,9 @@ export class PostCreateComponent {
   langService = inject(LanguageService);
 
   postData = { title: '', content: '' };
-  selectedFiles: File[] = [];
   isSubmitting = signal(false);
   errorMessage = signal<string | null>(null);
   private submissionKey = this.newSubmissionKey();
-
-  private static readonly MAX_FILE_SIZE = 8 * 1024 * 1024;
-
-  onFileSelected(event: any) {
-    this.errorMessage.set(null);
-    const files: FileList | null = event.target.files;
-    if (!files) return;
-
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      if (this.selectedFiles.length >= 5) {
-        this.errorMessage.set('MÁXIMO 5 ARCHIVOS POR PUBLICACIÓN.');
-        break;
-      }
-      if (file.size > PostCreateComponent.MAX_FILE_SIZE) {
-        this.errorMessage.set(`"${file.name}" SUPERA LOS 8 MB.`);
-        continue;
-      }
-      this.selectedFiles.push(file);
-    }
-
-    this.resetSubmissionKey();
-    event.target.value = '';
-  }
-
-  removeFile(index: number) {
-    this.selectedFiles.splice(index, 1);
-    this.resetSubmissionKey();
-    this.errorMessage.set(null);
-  }
 
   resetSubmissionKey() {
     this.submissionKey = this.newSubmissionKey();
@@ -158,10 +99,6 @@ export class PostCreateComponent {
     formData.append('title', this.postData.title);
     formData.append('content', this.postData.content);
     formData.append('roomId', this.roomId);
-    
-    this.selectedFiles.forEach(file => {
-      formData.append('files', file);
-    });
 
     try {
       const result = await this.forumService.createPost(formData, this.submissionKey);

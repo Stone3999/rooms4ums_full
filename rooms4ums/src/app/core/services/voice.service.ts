@@ -256,6 +256,9 @@ export class VoiceService {
         });
       }
     };
+    pc.oniceconnectionstatechange = () => {
+      console.info(`[VOICE] ICE ${userId}: ${pc.iceConnectionState}`);
+    };
 
     pc.onnegotiationneeded = async () => {
       if (this.negotiatingPeers.has(pc) || pc.signalingState !== 'stable') return;
@@ -275,6 +278,9 @@ export class VoiceService {
     };
 
     pc.ontrack = (event) => {
+      console.info(
+        `[VOICE] Received ${event.track.kind} track from ${userId} (${event.streams.length} streams)`
+      );
       this.attachRemoteTrack(userId, event);
     };
 

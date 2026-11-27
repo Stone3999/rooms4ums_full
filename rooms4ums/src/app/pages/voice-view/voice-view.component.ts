@@ -153,7 +153,7 @@ import { FormsModule } from '@angular/forms';
               <div class="stage-content">
                 @if (activeStageStreamer()) {
                   <div class="active-video-stage">
-                    <video [srcObject]="activeStageStreamer()?.stream" autoplay playsinline class="stage-video-el"></video>
+                    <video [srcObject]="activeStageStreamer()?.stream" autoplay playsinline muted class="stage-video-el"></video>
                     <div class="stage-overlay">
                       <span class="streamer-label">LIVE: {{ activeStageStreamer()?.username }}</span>
                     </div>
