@@ -33,28 +33,9 @@ class WearApplication : Application() {
             }
         )
 
-        manager.createNotificationChannel(
-            NotificationChannel(
-                CHANNEL_TELEMETRY,
-                "Telemetría de sensores",
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "Estado del servicio de sensores"
-            }
-        )
-
-        manager.createNotificationChannel(
-            NotificationChannel(
-                CHANNEL_EVENTS,
-                "Eventos de Rooms4ums",
-                NotificationManager.IMPORTANCE_DEFAULT
-            )
-        )
     }
 
     companion object {
         const val CHANNEL_REMOTE = "rooms4ums_remoto"
-        const val CHANNEL_TELEMETRY = "telemetria"
-        const val CHANNEL_EVENTS = "eventos"
     }
 }

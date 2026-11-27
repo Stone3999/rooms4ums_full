@@ -22,7 +22,7 @@ export const envValidationSchema = Joi.object({
   // escribir en Storage. Para subir archivos se necesita la service_role.
   // Si no se define, se usa SUPABASE_KEY y el upload fallara con RLS.
   SUPABASE_SERVICE_ROLE_KEY: Joi.string().allow('').optional(),
-  SUPABASE_BUCKET_NAME: Joi.string().default('avatars'),
+  SUPABASE_BUCKET_NAME: Joi.string().default('uploads'),
 
   // Firebase Cloud Messaging (push remoto).
   // Ambos son opcionales: si faltan, el backend arranca igual y el push

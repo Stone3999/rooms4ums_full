@@ -18,7 +18,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  /// Falso mientras la base local aún no pudo leerse (p. ej. sin permisos).
+  /// Indica si las salas se cargaron desde el backend o desde la caché local.
   bool _cacheAvailable = true;
   String? _currentUid;
   String? _currentUsername;
@@ -26,8 +26,8 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    _roomsFuture = _loadRooms();
     _loadIdentity();
-    _loadRooms();
   }
 
   Future<void> _loadIdentity() async {
@@ -47,37 +47,33 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   /// PRÁCTICA 4: primero red, y si falla se sirve la caché local.
-  Future<void> _loadRooms() async {
+  Future<List<Map<String, dynamic>>> _loadRooms() async {
     try {
       final rooms = await ApiService.getRooms();
       await LocalDatabase.instance.cacheRooms(rooms);
-      if (mounted) setState(() => _roomsFuture = Future.value(rooms));
+      if (mounted) setState(() => _cacheAvailable = true);
+      return rooms;
     } catch (_) {
       final cached = await LocalDatabase.instance.cachedRooms();
       if (cached.isEmpty) {
-        if (mounted) {
-          setState(() => _roomsFuture = Future.error('No se pudieron cargar las salas.'));
-        }
-        return;
+        throw StateError('No se pudieron cargar las salas.');
       }
-      if (!mounted) return;
-      setState(() {
-        _cacheAvailable = true;
-        _roomsFuture = Future.value(cached.map(LocalDatabase.roomFromRow).toList());
-      });
+      if (mounted) setState(() => _cacheAvailable = false);
+      return cached.map(LocalDatabase.roomFromRow).toList();
     }
   }
 
   late Future<List<Map<String, dynamic>>> _roomsFuture;
 
   void _reload() {
-    _loadRooms();
+    setState(() => _roomsFuture = _loadRooms());
   }
 
   Future<void> _refresh() async {
-    _loadRooms();
+    final roomsFuture = _loadRooms();
+    setState(() => _roomsFuture = roomsFuture);
     try {
-      await _roomsFuture;
+      await roomsFuture;
     } catch (_) {
       // La caché ya se cargó en _loadRooms.
     }

@@ -6,8 +6,6 @@ import 'package:flutter_background/flutter_background.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 
-import 'package:rooms4ums_mobile/core/services/wear_service.dart';
-
 class VoiceParticipant {
   final String id;
   final String username;
@@ -58,6 +56,7 @@ class VoiceService extends ChangeNotifier {
   final Map<String, RTCPeerConnection> _peerConnections = {};
   final Map<String, MediaStream> _remoteStreams = {};
   final Map<String, List<RTCIceCandidate>> _pendingCandidates = {};
+  final Set<String> _negotiatingPeers = {};
   final List<Map<String, dynamic>> channels = [];
   final List<VoiceParticipant> participants = [];
   final List<Map<String, dynamic>> messages = [];
@@ -72,82 +71,6 @@ class VoiceService extends ChangeNotifier {
   bool microphoneUnavailable = false;
   bool _backgroundExecutionEnabled = false;
   bool _isStoppingScreenShare = false;
-  Timer? _wearCallBridgeTimer;
-  bool _readingWearCallActions = false;
-  bool _wearCallErrorLogged = false;
-  int _wearCallStatusTicks = 0;
-  String _activeWearCallId = '';
-  String _callUsername = '';
-
-  void _startWearCallBridge(String username) {
-    if (defaultTargetPlatform != TargetPlatform.android) return;
-    _wearCallBridgeTimer?.cancel();
-    _activeWearCallId = DateTime.now().microsecondsSinceEpoch.toString();
-    _callUsername = username;
-    _wearCallErrorLogged = false;
-    _wearCallStatusTicks = 0;
-    unawaited(_publishWearCallStatus());
-    _wearCallBridgeTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (activeRoomId == null) return;
-      _wearCallStatusTicks++;
-      if (_wearCallStatusTicks.isEven) unawaited(_publishWearCallStatus());
-      unawaited(_processWearCallActions());
-    });
-  }
-
-  Future<void> _publishWearCallStatus() async {
-    final roomId = activeRoomId;
-    final channel = channels.cast<Map<String, dynamic>?>().firstWhere(
-      (item) => item?['id'] == roomId,
-      orElse: () => null,
-    );
-    try {
-      final result = await WearService.sendCallStatus(
-        active: roomId != null,
-        muted: isMuted,
-        callId: _activeWearCallId,
-        room: (channel?['topic'] ?? 'Canal de voz').toString(),
-        username: _callUsername,
-      );
-      if (result.ok) {
-        _wearCallErrorLogged = false;
-      } else if (!_wearCallErrorLogged) {
-        debugPrint('[WEAR] No se pudo actualizar el estado de llamada: ${result.message}');
-        _wearCallErrorLogged = true;
-      }
-    } catch (error, stackTrace) {
-      debugPrint('[WEAR] Error al actualizar el estado de llamada: $error');
-      debugPrintStack(stackTrace: stackTrace);
-    }
-  }
-
-  Future<void> _processWearCallActions() async {
-    if (_readingWearCallActions || activeRoomId == null) return;
-    _readingWearCallActions = true;
-    try {
-      final actions = await WearService.takeCallActions();
-      for (final action in actions) {
-        if (activeRoomId == null) break;
-        if (action.callId != _activeWearCallId) continue;
-
-        switch (action.action) {
-          case WearService.actionToggleMute:
-            await toggleMute();
-            break;
-          case WearService.actionHangUp:
-            await leaveRoom();
-            return;
-          default:
-            debugPrint('[WEAR] Acción de llamada desconocida: ${action.action}');
-        }
-      }
-    } catch (error, stackTrace) {
-      debugPrint('[WEAR] Error al procesar controles del reloj: $error');
-      debugPrintStack(stackTrace: stackTrace);
-    } finally {
-      _readingWearCallActions = false;
-    }
-  }
 
   Future<void> _ensureConnected() async {
     if (_socket?.connected == true) {
@@ -205,10 +128,14 @@ class VoiceService extends ChangeNotifier {
     });
     socket.on('user-joined', (dynamic data) {
       if (data is Map) {
-        _upsertParticipant(
-          data['id']?.toString() ?? '',
-          data['username']?.toString() ?? 'Usuario',
-        );
+        final id = data['id']?.toString() ?? '';
+        _upsertParticipant(id, data['username']?.toString() ?? 'Usuario');
+        if (id.isNotEmpty && _shouldInitiate(id)) {
+          _callParticipant(id).catchError((Object cause) {
+            error = 'No se pudo establecer la conexión de voz.';
+            notifyListeners();
+          });
+        }
       }
     });
     socket.on('user-left', (dynamic id) {
@@ -353,6 +280,9 @@ class VoiceService extends ChangeNotifier {
       }
 
       activeRoomId = roomId;
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        await Helper.setSpeakerphoneOnButPreferBluetooth();
+      }
       isMuted = microphoneUnavailable;
       if (microphoneUnavailable) {
         error = 'MICRÓFONO NO DISPONIBLE; TE UNISTE EN MODO SOLO ESCUCHA.';
@@ -366,10 +296,9 @@ class VoiceService extends ChangeNotifier {
           final name = user['username']?.toString() ?? 'Usuario';
           if (id.isEmpty) continue;
           _upsertParticipant(id, name);
-          await _callParticipant(id);
+          if (_shouldInitiate(id)) await _callParticipant(id);
         }
       }
-      _startWearCallBridge(username);
       notifyListeners();
     } catch (cause) {
       _socket?.emit('leave-room');
@@ -380,6 +309,7 @@ class VoiceService extends ChangeNotifier {
       }
       _peerConnections.clear();
       _pendingCandidates.clear();
+      _negotiatingPeers.clear();
       await _disposeRemoteStreams();
       await _disposeLocalMedia();
       participants.clear();
@@ -394,23 +324,42 @@ class VoiceService extends ChangeNotifier {
   }
 
   Future<void> _callParticipant(String id) async {
+    if (_peerConnections.containsKey(id)) return;
     final peer = await _createPeerConnection(id);
-    final audio = localAudioStream;
-    if (audio != null) {
-      for (final track in audio.getAudioTracks()) {
-        await peer.addTrack(track, audio);
-      }
-    } else {
-      await peer.addTransceiver(
+    _negotiatingPeers.add(id);
+    try {
+      final audioTransceiver = await peer.addTransceiver(
         kind: RTCRtpMediaType.RTCRtpMediaTypeAudio,
-        init: RTCRtpTransceiverInit(direction: TransceiverDirection.RecvOnly),
+        init: RTCRtpTransceiverInit(direction: TransceiverDirection.SendRecv),
       );
-    }
-    final screen = localScreenStream;
-    if (screen != null) {
-      for (final track in screen.getVideoTracks()) {
-        await peer.addTrack(track, screen);
+      final videoTransceiver = await peer.addTransceiver(
+        kind: RTCRtpMediaType.RTCRtpMediaTypeVideo,
+        init: RTCRtpTransceiverInit(direction: TransceiverDirection.SendRecv),
+      );
+      final audioTracks = localAudioStream?.getAudioTracks() ?? [];
+      final videoTracks = localScreenStream?.getVideoTracks() ?? [];
+      final audioTrack = audioTracks.isEmpty ? null : audioTracks.first;
+      final videoTrack = videoTracks.isEmpty ? null : videoTracks.first;
+      if (audioTrack != null) {
+        await audioTransceiver.sender.replaceTrack(audioTrack);
       }
+      if (videoTrack != null) {
+        await videoTransceiver.sender.replaceTrack(videoTrack);
+      }
+      final offer = await peer.createOffer();
+      await peer.setLocalDescription(offer);
+      _socket?.emit('signal', {
+        'to': id,
+        'signal': {'type': offer.type, 'sdp': offer.sdp},
+      });
+    } catch (cause) {
+      _peerConnections.remove(id);
+      _pendingCandidates.remove(id);
+      await peer.close();
+      await peer.dispose();
+      rethrow;
+    } finally {
+      _negotiatingPeers.remove(id);
     }
   }
 
@@ -436,13 +385,14 @@ class VoiceService extends ChangeNotifier {
       }
     };
     peer.onRenegotiationNeeded = () {
+      if (_negotiatingPeers.contains(id)) return;
       _negotiate(id, peer).catchError((Object cause) {
         error = 'No se pudo negociar la conexión de voz.';
         notifyListeners();
       });
     };
     peer.onTrack = (event) {
-      _attachRemoteTrack(id, event.track).catchError((Object cause) {
+      _attachRemoteTrack(id, event).catchError((Object cause) {
         error = 'No se pudo mostrar el audio o la pantalla compartida.';
         notifyListeners();
       });
@@ -450,7 +400,38 @@ class VoiceService extends ChangeNotifier {
     return peer;
   }
 
-  Future<void> _attachRemoteTrack(String id, MediaStreamTrack track) async {
+  bool _shouldInitiate(String remoteId) {
+    final localId = _socket?.id;
+    return localId != null && localId.compareTo(remoteId) < 0;
+  }
+
+  Future<RTCRtpTransceiver?> _findTransceiver(
+    RTCPeerConnection peer,
+    String kind,
+  ) async {
+    final transceivers = await peer.getTransceivers();
+    for (final transceiver in transceivers) {
+      if (transceiver.receiver.track?.kind == kind) return transceiver;
+    }
+    return null;
+  }
+
+  Future<RTCRtpTransceiver> _getOrCreateTransceiver(
+    RTCPeerConnection peer,
+    RTCRtpMediaType type,
+  ) async {
+    final kind = type == RTCRtpMediaType.RTCRtpMediaTypeAudio
+        ? 'audio'
+        : 'video';
+    final existing = await _findTransceiver(peer, kind);
+    if (existing != null) return existing;
+    return peer.addTransceiver(
+      kind: type,
+      init: RTCRtpTransceiverInit(direction: TransceiverDirection.SendRecv),
+    );
+  }
+
+  Future<void> _attachRemoteTrack(String id, RTCTrackEvent event) async {
     if (!_peerConnections.containsKey(id)) return;
     if (!participants.any((participant) => participant.id == id)) {
       _upsertParticipant(id, 'Participante');
@@ -462,6 +443,14 @@ class VoiceService extends ChangeNotifier {
       _remoteStreams[id] = stream;
     }
 
+    for (final source in event.streams) {
+      for (final track in source.getTracks()) {
+        if (!stream.getTracks().any((existing) => existing.id == track.id)) {
+          await stream.addTrack(track);
+        }
+      }
+    }
+    final track = event.track;
     if (!stream.getTracks().any((existing) => existing.id == track.id)) {
       await stream.addTrack(track);
     }
@@ -524,15 +513,21 @@ class VoiceService extends ChangeNotifier {
   }
 
   Future<void> _negotiate(String id, RTCPeerConnection peer) async {
-    if (peer.signalingState != RTCSignalingState.RTCSignalingStateStable) {
+    if (_negotiatingPeers.contains(id) ||
+        peer.signalingState != RTCSignalingState.RTCSignalingStateStable) {
       return;
     }
-    final offer = await peer.createOffer();
-    await peer.setLocalDescription(offer);
-    _socket?.emit('signal', {
-      'to': id,
-      'signal': {'type': offer.type, 'sdp': offer.sdp},
-    });
+    _negotiatingPeers.add(id);
+    try {
+      final offer = await peer.createOffer();
+      await peer.setLocalDescription(offer);
+      _socket?.emit('signal', {
+        'to': id,
+        'signal': {'type': offer.type, 'sdp': offer.sdp},
+      });
+    } finally {
+      _negotiatingPeers.remove(id);
+    }
   }
 
   Future<void> _handleSignal(dynamic data) async {
@@ -545,17 +540,27 @@ class VoiceService extends ChangeNotifier {
     final type = signal['type']?.toString();
     if (type == 'offer') {
       peer ??= await _createPeerConnection(from);
-      await peer.setRemoteDescription(
-        RTCSessionDescription(signal['sdp']?.toString(), type),
-      );
-      await _addLocalTracks(peer);
-      await _flushCandidates(from, peer);
-      final answer = await peer.createAnswer();
-      await peer.setLocalDescription(answer);
-      _socket?.emit('signal', {
-        'to': from,
-        'signal': {'type': answer.type, 'sdp': answer.sdp},
-      });
+      if (peer.signalingState != RTCSignalingState.RTCSignalingStateStable) {
+        throw StateError(
+          'Se recibió una oferta en un estado de señalización inesperado.',
+        );
+      }
+      _negotiatingPeers.add(from);
+      try {
+        await peer.setRemoteDescription(
+          RTCSessionDescription(signal['sdp']?.toString(), type),
+        );
+        await _addLocalTracks(peer);
+        await _flushCandidates(from, peer);
+        final answer = await peer.createAnswer();
+        await peer.setLocalDescription(answer);
+        _socket?.emit('signal', {
+          'to': from,
+          'signal': {'type': answer.type, 'sdp': answer.sdp},
+        });
+      } finally {
+        _negotiatingPeers.remove(from);
+      }
     } else if (type == 'answer' && peer != null) {
       await peer.setRemoteDescription(
         RTCSessionDescription(signal['sdp']?.toString(), type),
@@ -578,22 +583,18 @@ class VoiceService extends ChangeNotifier {
   }
 
   Future<void> _addLocalTracks(RTCPeerConnection peer) async {
-    final senders = await peer.getSenders();
     final audio = localAudioStream;
-    if (audio != null) {
-      for (final track in audio.getAudioTracks()) {
-        if (!senders.any((sender) => sender.track?.id == track.id)) {
-          await peer.addTrack(track, audio);
-        }
-      }
+    final audioTracks = audio?.getAudioTracks() ?? [];
+    final audioTrack = audioTracks.isEmpty ? null : audioTracks.first;
+    final audioTransceiver = await _findTransceiver(peer, 'audio');
+    if (audioTrack != null && audioTransceiver != null) {
+      await audioTransceiver.sender.replaceTrack(audioTrack);
     }
-    final screen = localScreenStream;
-    if (screen != null) {
-      for (final track in screen.getVideoTracks()) {
-        if (!senders.any((sender) => sender.track?.id == track.id)) {
-          await peer.addTrack(track, screen);
-        }
-      }
+    final screenTracks = localScreenStream?.getVideoTracks() ?? [];
+    final screenTrack = screenTracks.isEmpty ? null : screenTracks.first;
+    final videoTransceiver = await _findTransceiver(peer, 'video');
+    if (screenTrack != null && videoTransceiver != null) {
+      await videoTransceiver.sender.replaceTrack(screenTrack);
     }
   }
 
@@ -625,14 +626,17 @@ class VoiceService extends ChangeNotifier {
         microphoneUnavailable = false;
         isMuted = false;
         for (final peer in _peerConnections.values) {
+          final transceiver = await _getOrCreateTransceiver(
+            peer,
+            RTCRtpMediaType.RTCRtpMediaTypeAudio,
+          );
           for (final track in stream.getAudioTracks()) {
-            await peer.addTrack(track, stream);
+            await transceiver.sender.replaceTrack(track);
           }
         }
         _socket?.emit('toggle-mute', {'roomId': roomId, 'isMuted': false});
         error = null;
         notifyListeners();
-        unawaited(_publishWearCallStatus());
         return;
       } on PlatformException {
         microphoneUnavailable = true;
@@ -649,7 +653,6 @@ class VoiceService extends ChangeNotifier {
     }
     _socket?.emit('toggle-mute', {'roomId': roomId, 'isMuted': isMuted});
     notifyListeners();
-    unawaited(_publishWearCallStatus());
   }
 
   Future<void> toggleScreenShare() async {
@@ -682,7 +685,11 @@ class VoiceService extends ChangeNotifier {
         if (!_isStoppingScreenShare) unawaited(_stopScreenShare(roomId));
       };
       for (final peer in _peerConnections.values) {
-        await peer.addTrack(track, stream);
+        final transceiver = await _getOrCreateTransceiver(
+          peer,
+          RTCRtpMediaType.RTCRtpMediaTypeVideo,
+        );
+        await transceiver.sender.replaceTrack(track);
       }
       _socket?.emit('toggle-video', {'roomId': roomId, 'isSharing': true});
       error = null;
@@ -692,12 +699,8 @@ class VoiceService extends ChangeNotifier {
       localScreenStream = null;
       isSharingScreen = false;
       for (final peer in _peerConnections.values) {
-        final senders = await peer.getSenders();
-        for (final sender in senders.where(
-          (sender) => sender.track?.kind == 'video',
-        )) {
-          await peer.removeTrack(sender);
-        }
+        final transceiver = await _findTransceiver(peer, 'video');
+        if (transceiver != null) await transceiver.sender.replaceTrack(null);
       }
       for (final track in failedStream?.getTracks() ?? <MediaStreamTrack>[]) {
         await track.stop();
@@ -761,13 +764,12 @@ class VoiceService extends ChangeNotifier {
       final stream = localScreenStream;
       localScreenStream = null;
       isSharingScreen = false;
+      final videoTracks = stream?.getVideoTracks() ?? [];
+      final track = videoTracks.isEmpty ? null : videoTracks.first;
+      if (track != null) track.onEnded = null;
       for (final peer in _peerConnections.values) {
-        final senders = await peer.getSenders();
-        for (final sender in senders.where(
-          (sender) => sender.track?.kind == 'video',
-        )) {
-          await peer.removeTrack(sender);
-        }
+        final transceiver = await _findTransceiver(peer, 'video');
+        if (transceiver != null) await transceiver.sender.replaceTrack(null);
       }
       for (final track in stream?.getTracks() ?? <MediaStreamTrack>[]) {
         await track.stop();
@@ -796,8 +798,6 @@ class VoiceService extends ChangeNotifier {
 
   Future<void> leaveRoom() async {
     final roomId = activeRoomId;
-    _wearCallBridgeTimer?.cancel();
-    _wearCallBridgeTimer = null;
     if (roomId != null) _socket?.emit('leave-room');
     activeRoomId = null;
     if (isSharingScreen && roomId != null) {
@@ -809,6 +809,7 @@ class VoiceService extends ChangeNotifier {
     }
     _peerConnections.clear();
     _pendingCandidates.clear();
+    _negotiatingPeers.clear();
     await _disposeRemoteStreams();
     await _disposeLocalMedia();
     participants.clear();
@@ -816,12 +817,10 @@ class VoiceService extends ChangeNotifier {
     isMuted = false;
     microphoneUnavailable = false;
     await _disableAndroidScreenCapture();
-    notifyListeners();
-    if (roomId != null) {
-      await _publishWearCallStatus();
-      _activeWearCallId = '';
-      _callUsername = '';
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      await Helper.setSpeakerphoneOn(false);
     }
+    notifyListeners();
   }
 
   Future<void> _disposeLocalMedia() async {
@@ -866,6 +865,7 @@ class VoiceService extends ChangeNotifier {
 
   void _removeParticipant(String id) {
     final peer = _peerConnections.remove(id);
+    _negotiatingPeers.remove(id);
     if (peer != null) {
       unawaited(_disposePeer(peer));
     }

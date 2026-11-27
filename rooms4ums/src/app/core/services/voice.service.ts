@@ -32,6 +32,9 @@ export class VoiceService {
   private socket!: Socket;
   private localStream: MediaStream | null = null;
   private peerConnections: Map<string, RTCPeerConnection> = new Map();
+  private remoteStreams: Map<string, MediaStream> = new Map();
+  private pendingIceCandidates: Map<string, RTCIceCandidateInit[]> = new Map();
+  private negotiatingPeers = new WeakSet<RTCPeerConnection>();
   
   private _users = new BehaviorSubject<VoiceUser[]>([]);
   users$ = this._users.asObservable();
@@ -74,14 +77,24 @@ export class VoiceService {
 
     this.socket.on('user-joined', (user: { id: string; username: string }) => {
       this.addUserToList(user.id, user.username);
+      if (this.shouldInitiate(user.id)) {
+        this.callUser(user.id, user.username).catch(error =>
+          console.error('[VOICE] Could not start peer connection:', error)
+        );
+      }
     });
 
     this.socket.on('signal', async (data: { from: string; signal: any }) => {
-      await this.handleSignal(data.from, data.signal);
+      try {
+        await this.handleSignal(data.from, data.signal);
+      } catch (error) {
+        console.error('[VOICE] Signaling failed:', error);
+      }
     });
 
     this.socket.on('user-left', (userId: string) => {
       this.removeUser(userId);
+      this.pendingIceCandidates.delete(userId);
     });
 
     this.socket.on('user-mute-toggled', (data: { id: string; isMuted: boolean }) => {
@@ -89,7 +102,11 @@ export class VoiceService {
     });
 
     this.socket.on('user-video-toggled', (data: { id: string; isSharing: boolean }) => {
-      this.updateUserInList(data.id, { isSharingVideo: data.isSharing });
+      if (data.isSharing) {
+        this.updateUserInList(data.id, { isSharingVideo: true });
+      } else {
+        this.removeRemoteVideoTracks(data.id);
+      }
     });
 
     this.socket.on('new-voice-message', (msg: any) => {
@@ -166,7 +183,9 @@ export class VoiceService {
       if (response && response.users) {
         for (const user of response.users) {
           this.addUserToList(user.id, user.username);
-          await this.callUser(user.id, user.username);
+          if (this.shouldInitiate(user.id)) {
+            await this.callUser(user.id, user.username);
+          }
         }
       }
       return this.microphoneAvailable;
@@ -190,27 +209,38 @@ export class VoiceService {
     this.localStream = stream;
     this.microphoneAvailable = true;
     for (const pc of this.peerConnections.values()) {
-      stream.getAudioTracks().forEach(track => pc.addTrack(track, stream));
+      const audioTransceiver = this.getTransceiver(pc, 'audio');
+      const audioTrack = stream.getAudioTracks()[0];
+      if (audioTransceiver && audioTrack) {
+        await audioTransceiver.sender.replaceTrack(audioTrack);
+      }
     }
     this.toggleMute(roomId, false);
   }
 
   private async callUser(userId: string, username: string) {
+    if (this.peerConnections.has(userId)) return;
     const pc = this.createPeerConnection(userId, username);
-    
-    // Añadir audio
-    this.localStream?.getTracks().forEach(track => {
-      pc.addTrack(track, this.localStream!);
-    });
-    if (!this.localStream) {
-      pc.addTransceiver('audio', { direction: 'recvonly' });
-    }
+    this.negotiatingPeers.add(pc);
+    try {
+      const audioTransceiver = pc.addTransceiver('audio', { direction: 'sendrecv' });
+      const videoTransceiver = pc.addTransceiver('video', { direction: 'sendrecv' });
+      const audioTrack = this.localStream?.getAudioTracks()[0];
+      const videoTrack = this.screenStream?.getVideoTracks()[0];
 
-    // ¡CLAVE! Si ya estamos compartiendo pantalla, añadir el video a la nueva conexión
-    if (this.isSharingScreen && this.screenStream) {
-      this.screenStream.getTracks().forEach(track => {
-        pc.addTrack(track, this.screenStream!);
+      if (audioTrack) await audioTransceiver.sender.replaceTrack(audioTrack);
+      if (this.isSharingScreen && videoTrack) {
+        await videoTransceiver.sender.replaceTrack(videoTrack);
+      }
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      this.socket.emit('signal', {
+        to: userId,
+        signal: { type: 'offer', sdp: offer.sdp }
       });
+    } finally {
+      this.negotiatingPeers.delete(pc);
     }
   }
 
@@ -228,6 +258,8 @@ export class VoiceService {
     };
 
     pc.onnegotiationneeded = async () => {
+      if (this.negotiatingPeers.has(pc) || pc.signalingState !== 'stable') return;
+      this.negotiatingPeers.add(pc);
       try {
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
@@ -237,18 +269,73 @@ export class VoiceService {
         });
       } catch (err) {
         console.error('[VOICE] Negotiation error:', err);
+      } finally {
+        this.negotiatingPeers.delete(pc);
       }
     };
 
     pc.ontrack = (event) => {
-      const hasVideo = event.streams[0].getVideoTracks().length > 0;
-      this.updateUserInList(userId, { 
-        stream: event.streams[0],
-        isSharingVideo: hasVideo
-      });
+      this.attachRemoteTrack(userId, event);
     };
 
     return pc;
+  }
+
+  private shouldInitiate(userId: string): boolean {
+    const localId = this.socket?.id;
+    return !!localId && localId < userId;
+  }
+
+  private getTransceiver(pc: RTCPeerConnection, kind: 'audio' | 'video') {
+    return pc.getTransceivers().find(transceiver => transceiver.receiver.track.kind === kind);
+  }
+
+  private attachRemoteTrack(userId: string, event: RTCTrackEvent) {
+    let stream = this.remoteStreams.get(userId);
+    if (!stream) {
+      stream = new MediaStream();
+      this.remoteStreams.set(userId, stream);
+    }
+
+    for (const source of event.streams) {
+      for (const track of source.getTracks()) {
+        if (!stream.getTracks().some(existing => existing.id === track.id)) {
+          stream.addTrack(track);
+        }
+      }
+    }
+    if (!stream.getTracks().some(existing => existing.id === event.track.id)) {
+      stream.addTrack(event.track);
+    }
+
+    this.updateUserInList(userId, {
+      stream,
+      isSharingVideo: stream.getVideoTracks().length > 0
+    });
+
+    event.track.onended = () => {
+      stream?.removeTrack(event.track);
+      this.updateUserInList(userId, {
+        stream,
+        isSharingVideo: !!stream?.getVideoTracks().length
+      });
+    };
+  }
+
+  private removeRemoteVideoTracks(userId: string) {
+    const stream = this.remoteStreams.get(userId);
+    if (stream) {
+      stream.getVideoTracks().forEach(track => stream.removeTrack(track));
+    }
+    this.updateUserInList(userId, { stream, isSharingVideo: false });
+  }
+
+  private async flushIceCandidates(userId: string, pc: RTCPeerConnection) {
+    const candidates = this.pendingIceCandidates.get(userId) ?? [];
+    this.pendingIceCandidates.delete(userId);
+    for (const candidate of candidates) {
+      await pc.addIceCandidate(new RTCIceCandidate(candidate));
+    }
   }
 
   private async handleSignal(from: string, signal: any) {
@@ -256,35 +343,46 @@ export class VoiceService {
 
     if (signal.type === 'offer') {
       if (!pc) pc = this.createPeerConnection(from, 'Remote User');
-      await pc.setRemoteDescription(new RTCSessionDescription(signal));
-      
-      const senders = pc.getSenders();
-      
-      // Añadir audio si no está
-      this.localStream?.getTracks().forEach(track => {
-        if (!senders.find(s => s.track === track)) {
-          pc!.addTrack(track, this.localStream!);
-        }
-      });
-
-      // ¡CLAVE! Si estamos compartiendo pantalla, responder también con video
-      if (this.isSharingScreen && this.screenStream) {
-        this.screenStream.getTracks().forEach(track => {
-          if (!senders.find(s => s.track === track)) {
-            pc!.addTrack(track, this.screenStream!);
-          }
-        });
+      if (pc.signalingState !== 'stable') {
+        throw new Error(`Unexpected offer while signaling state is ${pc.signalingState}`);
       }
+      this.negotiatingPeers.add(pc);
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(signal));
+        await this.flushIceCandidates(from, pc);
 
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      this.socket.emit('signal', { to: from, signal: answer });
+        const audioTrack = this.localStream?.getAudioTracks()[0];
+        const audioTransceiver = this.getTransceiver(pc, 'audio');
+        if (audioTrack && audioTransceiver) {
+          await audioTransceiver.sender.replaceTrack(audioTrack);
+        }
+
+        const videoTrack = this.screenStream?.getVideoTracks()[0];
+        const videoTransceiver = this.getTransceiver(pc, 'video');
+        if (this.isSharingScreen && videoTrack && videoTransceiver) {
+          await videoTransceiver.sender.replaceTrack(videoTrack);
+        }
+
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        this.socket.emit('signal', { to: from, signal: answer });
+      } finally {
+        this.negotiatingPeers.delete(pc);
+      }
     } 
     else if (signal.type === 'answer') {
-      await pc?.setRemoteDescription(new RTCSessionDescription(signal));
+      if (!pc) return;
+      await pc.setRemoteDescription(new RTCSessionDescription(signal));
+      await this.flushIceCandidates(from, pc);
     } 
     else if (signal.type === 'candidate') {
-      await pc?.addIceCandidate(new RTCIceCandidate(signal.candidate));
+      if (!pc || !pc.remoteDescription) {
+        const pending = this.pendingIceCandidates.get(from) ?? [];
+        pending.push(signal.candidate);
+        this.pendingIceCandidates.set(from, pending);
+        return;
+      }
+      await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
     }
   }
 
@@ -308,6 +406,8 @@ export class VoiceService {
     const pc = this.peerConnections.get(userId);
     pc?.close();
     this.peerConnections.delete(userId);
+    this.remoteStreams.delete(userId);
+    this.pendingIceCandidates.delete(userId);
     const filteredUsers = this._users.value.filter(u => u.id !== userId);
     this._users.next(filteredUsers);
   }
@@ -326,6 +426,8 @@ export class VoiceService {
     this.screenStream?.getTracks().forEach(track => track.stop());
     this.peerConnections.forEach(pc => pc.close());
     this.peerConnections.clear();
+    this.remoteStreams.clear();
+    this.pendingIceCandidates.clear();
     
     if (this.socket) {
       this.socket.emit('leave-room');
@@ -350,44 +452,53 @@ export class VoiceService {
 
   async toggleScreenShare(roomId: string): Promise<boolean> {
     if (this.isSharingScreen) {
-      this.stopScreenShare(roomId);
+      await this.stopScreenShare(roomId);
       return false;
     }
 
     try {
       this.screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-      this.isSharingScreen = true;
-
       const videoTrack = this.screenStream.getVideoTracks()[0];
+      if (!videoTrack) throw new Error('No se pudo obtener el video de la pantalla compartida.');
 
-      // Añadir track de video a todas las conexiones existentes
-      this.peerConnections.forEach(pc => {
-        pc.addTrack(videoTrack, this.screenStream!);
-      });
+      for (const pc of this.peerConnections.values()) {
+        const videoTransceiver = this.getTransceiver(pc, 'video');
+        if (videoTransceiver) await videoTransceiver.sender.replaceTrack(videoTrack);
+      }
 
-      videoTrack.onended = () => this.stopScreenShare(roomId);
+      this.isSharingScreen = true;
+      videoTrack.onended = () => {
+        void this.stopScreenShare(roomId).catch(error =>
+          console.error('[VOICE] Could not stop screen sharing:', error)
+        );
+      };
       this._localScreenStream.next(this.screenStream);
       this.socket.emit('toggle-video', { roomId, isSharing: true });
       
       return true;
     } catch (err) {
+      this.screenStream?.getTracks().forEach(track => track.stop());
+      this.screenStream = null;
+      this.isSharingScreen = false;
+      this._localScreenStream.next(null);
       console.error('Error sharing screen:', err);
       return false;
     }
   }
 
-  private stopScreenShare(roomId: string) {
-    this.screenStream?.getTracks().forEach(track => track.stop());
+  private async stopScreenShare(roomId: string) {
+    const stream = this.screenStream;
     this.screenStream = null;
     this.isSharingScreen = false;
     this._localScreenStream.next(null);
 
-    // Quitar track de video en todas las conexiones
-    this.peerConnections.forEach(pc => {
-      const senders = pc.getSenders();
-      const videoSender = senders.find(s => s.track?.kind === 'video');
-      if (videoSender) pc.removeTrack(videoSender);
-    });
+    const videoTrack = stream?.getVideoTracks()[0];
+    if (videoTrack) videoTrack.onended = null;
+    for (const pc of this.peerConnections.values()) {
+      const videoTransceiver = this.getTransceiver(pc, 'video');
+      if (videoTransceiver) await videoTransceiver.sender.replaceTrack(null);
+    }
+    stream?.getTracks().forEach(track => track.stop());
 
     this.socket.emit('toggle-video', { roomId, isSharing: false });
   }

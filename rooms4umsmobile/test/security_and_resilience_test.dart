@@ -64,14 +64,16 @@ void main() {
     });
   });
 
-  group('Wear OS - Controles de llamada', () {
-    testWidgets('no ofrece chat de texto y muestra el estado de llamada inactivo', (tester) async {
+  group('Wear OS - Avisos de publicaciones', () {
+    testWidgets('solo presenta la activación de avisos, sin estado del enlace ni llamadas', (tester) async {
       await tester.pumpWidget(MaterialApp(theme: AppTheme.darkRetroTheme, home: const WearableScreen()));
       await tester.pump();
 
       expect(find.byType(TextField), findsNothing);
-      expect(find.text('SIN LLAMADA ACTIVA'), findsOneWidget);
-      expect(find.textContaining('MENSAJES REALES'), findsNothing);
+      expect(find.text('AVISOS DE PUBLICACIONES'), findsOneWidget);
+      expect(find.text('ACTIVAR AVISOS EN EL RELOJ'), findsOneWidget);
+      expect(find.textContaining('ENLACE ACTIVO'), findsNothing);
+      expect(find.textContaining('EN LLAMADA'), findsNothing);
     });
   });
 

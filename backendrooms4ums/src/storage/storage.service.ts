@@ -18,7 +18,7 @@ export class StorageService implements OnModuleInit {
     const supabaseKey = serviceKey || publicKey;
 
     this.keyMode = serviceKey ? 'service_role' : 'anon';
-    this.bucketName = this.configService.get<string>('SUPABASE_BUCKET_NAME') || 'avatars';
+    this.bucketName = this.configService.get<string>('SUPABASE_BUCKET_NAME') || 'uploads';
 
     this.supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -38,14 +38,14 @@ export class StorageService implements OnModuleInit {
       if (error) {
         this.logger.error(
           `No se pudo leer el bucket "${this.bucketName}": ${error.message}. ` +
-            'Créalo en Supabase > Storage (debe ser público para ver las imágenes).',
+            'Créalo en Supabase > Storage o define SUPABASE_BUCKET_NAME.',
         );
         return;
       }
       this.logger.log(`Bucket "${this.bucketName}" encontrado. public=${data.public}`);
       if (!data.public) {
         this.logger.warn(
-          `El bucket "${this.bucketName}" es privado: las URLs públicas devolverán 403 y las imágenes no se verán.`,
+          `El bucket "${this.bucketName}" es privado; las imágenes se sirven con URLs firmadas.`,
         );
       }
     } catch (e: any) {

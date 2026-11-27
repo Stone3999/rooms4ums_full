@@ -5,112 +5,51 @@
     android:layout_height="match_parent"
     android:background="@color/fondo">
 
-    <ScrollView
+    <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:layout_height="match_parent"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        android:padding="14dp">
 
-        <LinearLayout
+        <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:gravity="center_horizontal"
-            android:padding="12dp">
+            android:gravity="center"
+            android:text="@string/app_name"
+            android:textColor="@color/acento"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:fontFamily="monospace" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center"
+            android:text="PUBLICACIONES NUEVAS"
+            android:textColor="@color/texto"
+            android:textSize="10sp"
+            android:textStyle="bold"
+            android:fontFamily="monospace" />
+
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_marginTop="10dp"
+            android:layout_weight="1">
 
             <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/app_name"
-                android:textColor="@color/acento"
-                android:textSize="16sp"
-                android:textStyle="bold"
-                android:letterSpacing="0.12"
-                android:fontFamily="monospace" />
-
-            <TextView
-                android:id="@+id/status"
+                android:id="@+id/notification_history"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
                 android:gravity="center"
-                android:text="@string/status_iniciando"
-                android:textColor="@color/texto"
-                android:textSize="11sp"
-                android:fontFamily="monospace" />
-
-            <!-- La sesión NO se captura aquí: la manda el celular por Data Layer. -->
-            <TextView
-                android:id="@+id/sesion"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:gravity="center"
-                android:text="@string/status_esperando_vinculo"
+                android:text="@string/notifications_empty"
                 android:textColor="@color/texto_suave"
-                android:textSize="9sp"
+                android:textSize="10sp"
+                android:lineSpacingExtra="4dp"
                 android:fontFamily="monospace" />
+        </ScrollView>
 
-            <TextView
-                android:id="@+id/sensores"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:gravity="center"
-                android:text="@string/status_sensores"
-                android:textColor="@color/texto_suave"
-                android:textSize="9sp"
-                android:fontFamily="monospace" />
-
-            <TextView
-                android:id="@+id/call_status"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="14dp"
-                android:gravity="center"
-                android:text="SIN LLAMADA ACTIVA"
-                android:textColor="@color/acento"
-                android:textSize="11sp"
-                android:textStyle="bold"
-                android:fontFamily="monospace" />
-
-            <LinearLayout
-                android:id="@+id/call_controls"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:gravity="center"
-                android:orientation="horizontal"
-                android:visibility="gone">
-
-                <Button
-                    android:id="@+id/mute_call"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:minHeight="40dp"
-                    android:text="SILENCIAR"
-                    android:textSize="9sp" />
-
-                <Button
-                    android:id="@+id/hangup_call"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="6dp"
-                    android:layout_weight="1"
-                    android:minHeight="40dp"
-                    android:text="COLGAR"
-                    android:textSize="9sp" />
-            </LinearLayout>
-
-            <TextView
-                android:id="@+id/call_feedback"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:gravity="center"
-                android:textColor="@color/texto_suave"
-                android:textSize="8sp"
-                android:fontFamily="monospace" />
-
-        </LinearLayout>
-    </ScrollView>
+    </LinearLayout>
 </androidx.wear.widget.BoxInsetLayout>

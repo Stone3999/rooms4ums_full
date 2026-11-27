@@ -6,17 +6,10 @@
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
         android:usesPermissionFlags="neverForLocation"/>
 
-    <!-- PRÁCTICA 1 - ejecución persistente y sensores -->
-    <uses-permission android:name="android.permission.WAKE_LOCK"/>
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
 
-    <!-- El sensor de ritmo cardiaco es opcional: no todos los relojes lo traen. -->
-    <uses-feature android:name="android.hardware.sensor.heartrate" android:required="false"/>
-    <uses-feature android:name="android.hardware.sensor.accelerometer" android:required="true"/>
     <uses-feature android:name="android.hardware.type.watch"/>
 
     <application
@@ -65,16 +58,6 @@
         </activity>
 
         <!--
-            PRÁCTICA 1: servicio en primer plano. Mantiene la telemetría de
-            sensores viva aunque la pantalla esté apagada, que es justamente la
-            diferencia entre una app de wearable y una app de celular.
-        -->
-        <service
-            android:name=".TelemetryService"
-            android:exported="false"
-            android:foregroundServiceType="dataSync" />
-
-        <!--
             PRÁCTICA 2: receptor de mensajes del teléfono (Data Layer API).
         -->
         <service
@@ -86,11 +69,7 @@
             </intent-filter>
         </service>
 
-        <!--
-            PRÁCTICA 3: push remoto. El reloj registra su PROPIO token FCM
-            contra el mismo endpoint que usa el móvil (/api/push/register),
-            por lo que un solo envío del backend notifica a ambos.
-        -->
+        <!-- El reloj registra su propio token FCM para recibir publicaciones. -->
         <service
             android:name=".WearPushMessagingService"
             android:exported="false">
