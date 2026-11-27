@@ -1,8 +1,9 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, ConflictException, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Post, PostDocument } from './post.schema';
 import { PushService } from '../push/push.service';
+import { StorageService } from '../storage/storage.service';
 
 @Injectable()
 export class PostsService {
@@ -11,19 +12,53 @@ export class PostsService {
   constructor(
     @InjectModel(Post.name) private postModel: Model<PostDocument>,
     private readonly pushService: PushService,
+    private readonly storageService: StorageService,
   ) {}
+
+  /**
+   * Regenera la URL de cada adjunto a partir de su `path` guardado.
+   *
+   * Práctica 3/10: la base solo conserva la ruta interna; la URL firmada se
+   * emite en la lectura y caduca. Así un enlace filtrado deja de servir y
+   * rotar la firma no exige migrar documentos.
+   */
+  private async signAttachments<T extends Record<string, any>>(post: T): Promise<T> {
+    const attachments = (post as any)?.attachments;
+    if (!Array.isArray(attachments) || attachments.length === 0) return post;
+
+    const signed = await Promise.all(
+      attachments.map(async (attachment: any) => {
+        if (!attachment?.path) return attachment;
+        try {
+          const url = await this.storageService.getAttachmentUrl(attachment.path);
+          return { ...attachment, url };
+        } catch {
+          return attachment;
+        }
+      }),
+    );
+
+    return { ...post, attachments: signed };
+  }
+
+  private async signAll<T extends Record<string, any>>(posts: T[]): Promise<T[]> {
+    return Promise.all(posts.map((post) => this.signAttachments(post)));
+  }
 
   /**
    * ÚNICO punto de creación de posts del sistema.
    *
-   * Aquí se dispara el push porque TODOS los clientes (web Angular, app
-   * Flutter o cualquier cliente futuro) pasan por aqui. De este modo el
-   * requisito "sin importar de donde se publique un post" se cumple sin
-   * tocar ninguna de las aplicaciones cliente.
-   *
-   * El envio es asincrono y su fallo jamas debe impedir crear el post.
+   * Soporta `idempotencyKey` para evitar duplicados ante reintentos de red
+   * (Práctica 12) y dispara el push remoto de forma asíncrona.
    */
   async create(createPostDto: any): Promise<PostDocument> {
+    if (createPostDto.idempotencyKey) {
+      const existing = await this.postModel
+        .findOne({ idempotencyKey: createPostDto.idempotencyKey })
+        .exec();
+      if (existing) return existing;
+    }
+
     const createdPost = await new this.postModel(createPostDto).save();
 
     this.pushService
@@ -33,41 +68,58 @@ export class PostsService {
     return createdPost;
   }
 
-  async findAllByRoom(roomId: string, page = 1, limit = 20): Promise<{ data: PostDocument[], total: number }> {
-    const skip = (page - 1) * limit;
+  async findAllByRoom(roomId: string, page = 1, limit = 20): Promise<{ data: any[]; total: number }> {
+    const safePage = Math.max(1, Number(page) || 1);
+    const safeLimit = Math.min(50, Math.max(1, Number(limit) || 20));
+    const skip = (safePage - 1) * safeLimit;
     const [data, total] = await Promise.all([
-      this.postModel.find({ roomId }).sort({ createdAt: -1 }).skip(skip).limit(limit).exec(),
+      this.postModel
+        .find({ roomId })
+        .select('title content authorId authorName roomId attachments viewCount commentCount tags status priority assignedAgentId createdAt updatedAt __v')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(safeLimit)
+        .lean()
+        .exec(),
       this.postModel.countDocuments({ roomId }).exec(),
     ]);
-    return { data, total };
+    return { data: await this.signAll(data), total };
   }
 
   async findById(id: string): Promise<PostDocument> {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new NotFoundException('Post not found');
+    }
     const post = await this.postModel.findById(id).exec();
     if (!post) throw new NotFoundException('Post not found');
     
     // Incrementar contador de visitas de forma asíncrona
     this.postModel.updateOne({ _id: id }, { $inc: { viewCount: 1 } }).exec();
     
-    return post;
+    return (await this.signAttachments(post.toObject())) as unknown as PostDocument;
   }
 
-  async findPopular(limit = 5): Promise<PostDocument[]> {
-    return this.postModel.find().sort({ viewCount: -1, createdAt: -1 }).limit(limit).exec();
+  async findPopular(limit = 5): Promise<any[]> {
+    const safeLimit = Math.min(50, Math.max(1, Number(limit) || 5));
+    const data = await this.postModel.find().sort({ viewCount: -1, createdAt: -1 }).limit(safeLimit).lean().exec();
+    return this.signAll(data);
   }
 
-  async findRecent(limit = 10): Promise<PostDocument[]> {
-    return this.postModel.find().sort({ createdAt: -1 }).limit(limit).exec();
+  async findRecent(limit = 10): Promise<any[]> {
+    const safeLimit = Math.min(50, Math.max(1, Number(limit) || 10));
+    const data = await this.postModel.find().sort({ createdAt: -1 }).limit(safeLimit).lean().exec();
+    return this.signAll(data);
   }
 
   async search(query: string, limit = 20): Promise<PostDocument[]> {
-    return this.postModel.find(
+    const data = await this.postModel.find(
       { $text: { $search: query } },
       { score: { $meta: 'textScore' } }
     )
     .sort({ score: { $meta: 'textScore' } })
     .limit(limit)
     .exec();
+    return (await this.signAll(data)) as unknown as PostDocument[];
   }
 
   async incrementCommentCount(postId: string | Types.ObjectId) {
@@ -75,6 +127,7 @@ export class PostsService {
   }
 
   async update(id: string, updatePostDto: any): Promise<PostDocument> {
+    if (!Types.ObjectId.isValid(id)) throw new NotFoundException('Post not found');
     const updatedPost = await this.postModel
       .findByIdAndUpdate(id, updatePostDto, { new: true })
       .exec();
@@ -82,9 +135,52 @@ export class PostsService {
     return updatedPost;
   }
 
+  /**
+   * Actualización protegida por propiedad/rol y control optimista de versión.
+   */
+  async updateWithAuth(
+    id: string,
+    updateDto: Record<string, any>,
+    requesterId: string,
+    isAdminOrAgent: boolean,
+  ): Promise<PostDocument> {
+    if (!Types.ObjectId.isValid(id)) throw new NotFoundException('Post not found');
+    const post = await this.postModel.findById(id).exec();
+    if (!post) throw new NotFoundException('Post not found');
+
+    if (String(post.authorId) !== String(requesterId) && !isAdminOrAgent) {
+      throw new ForbiddenException('No tienes permiso para modificar este registro');
+    }
+
+    if (updateDto.expectedVersion !== undefined && post.__v !== updateDto.expectedVersion) {
+      throw new ConflictException('Conflicto de concurrencia: el registro fue actualizado previamente');
+    }
+
+    const { expectedVersion: _v, authorId: _a, authorName: _an, ...safeFields } = updateDto;
+    Object.assign(post, safeFields);
+    return post.save();
+  }
+
   async delete(id: string): Promise<any> {
+    if (!Types.ObjectId.isValid(id)) throw new NotFoundException('Post not found');
     const result = await this.postModel.findByIdAndDelete(id).exec();
     if (!result) throw new NotFoundException('Post not found');
+    return { message: 'Post deleted successfully' };
+  }
+
+  /**
+   * Eliminación protegida por propiedad o rol administrador.
+   */
+  async deleteWithAuth(id: string, requesterId: string, isAdmin: boolean): Promise<any> {
+    if (!Types.ObjectId.isValid(id)) throw new NotFoundException('Post not found');
+    const post = await this.postModel.findById(id).exec();
+    if (!post) throw new NotFoundException('Post not found');
+
+    if (String(post.authorId) !== String(requesterId) && !isAdmin) {
+      throw new ForbiddenException('No tienes permiso para eliminar este registro');
+    }
+
+    await this.postModel.findByIdAndDelete(id).exec();
     return { message: 'Post deleted successfully' };
   }
 }

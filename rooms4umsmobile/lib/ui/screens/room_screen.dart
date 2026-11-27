@@ -1,8 +1,12 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import 'package:rooms4ums_mobile/core/services/api_service.dart';
 import 'package:rooms4ums_mobile/core/services/new_post_watcher.dart';
 import 'package:rooms4ums_mobile/core/theme/app_colors.dart';
+import 'package:rooms4ums_mobile/core/utils/security_validators.dart';
 import 'package:rooms4ums_mobile/data/local/local_database.dart';
 import 'package:rooms4ums_mobile/ui/screens/post_detail_screen.dart';
 import 'package:rooms4ums_mobile/ui/widgets/post_card.dart';
@@ -333,6 +337,8 @@ class _PostComposer extends StatefulWidget {
 class _PostComposerState extends State<_PostComposer> {
   final _titleController = TextEditingController();
   final _contentController = TextEditingController();
+  final _picker = ImagePicker();
+  final List<PostAttachment> _attachments = <PostAttachment>[];
   bool _isLoading = false;
   String? _error;
 
@@ -343,12 +349,86 @@ class _PostComposerState extends State<_PostComposer> {
     super.dispose();
   }
 
+  /// Tipo MIME a partir de la extensión: `image_picker` no siempre lo informa.
+  String _mimeFromName(String name) {
+    final lower = name.toLowerCase();
+    if (lower.endsWith('.png')) return 'image/png';
+    if (lower.endsWith('.webp')) return 'image/webp';
+    return 'image/jpeg';
+  }
+
+  /// PRÁCTICA 7: selección y validación de adjuntos antes de enviarlos.
+  Future<void> _pickImages() async {
+    if (_attachments.length >= SecurityValidators.maxAttachments) {
+      setState(() => _error = 'Máximo ${SecurityValidators.maxAttachments} imágenes por publicación.');
+      return;
+    }
+
+    try {
+      final files = await _picker.pickMultiImage(imageQuality: 85, maxWidth: 1600);
+      if (files.isEmpty) return;
+
+      final selected = <PostAttachment>[];
+      String? validationError;
+
+      for (final file in files) {
+        if (_attachments.length + selected.length >= SecurityValidators.maxAttachments) {
+          validationError = 'Máximo ${SecurityValidators.maxAttachments} imágenes por publicación.';
+          break;
+        }
+        final bytes = await file.readAsBytes();
+        final mimeType = file.mimeType ?? _mimeFromName(file.name);
+        final error = SecurityValidators.validateAttachment(
+          filename: file.name,
+          mimeType: mimeType,
+          bytes: bytes.length,
+        );
+        if (error != null) {
+          validationError = '${file.name}: $error';
+          continue;
+        }
+        selected.add(PostAttachment(filename: file.name, mimeType: mimeType, bytes: bytes));
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _attachments.addAll(selected);
+        _error = validationError;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _error = 'No se pudo abrir la galería del dispositivo.');
+    }
+  }
+
+  void _removeAttachment(int index) {
+    setState(() => _attachments.removeAt(index));
+  }
+
   Future<void> _submit() async {
     final title = _titleController.text.trim();
     final content = _contentController.text.trim();
 
     if (title.isEmpty || content.isEmpty) {
       setState(() => _error = 'El título y el contenido son obligatorios.');
+      return;
+    }
+    final titleError = SecurityValidators.validateMessage(
+      title,
+      maxLength: SecurityValidators.maxTitleLength,
+      emptyMessage: 'El título es obligatorio.',
+    );
+    if (titleError != null) {
+      setState(() => _error = titleError);
+      return;
+    }
+    final contentError = SecurityValidators.validateMessage(
+      content,
+      maxLength: 5000,
+      emptyMessage: 'El contenido es obligatorio.',
+    );
+    if (contentError != null) {
+      setState(() => _error = contentError);
       return;
     }
 
@@ -358,7 +438,12 @@ class _PostComposerState extends State<_PostComposer> {
     });
 
     try {
-      await ApiService.createPost(roomId: widget.roomId, title: title, content: content);
+      await ApiService.createPost(
+        roomId: widget.roomId,
+        title: title,
+        content: content,
+        attachments: _attachments,
+      );
       if (!mounted) return;
       Navigator.pop(context, true);
     } catch (e) {
@@ -423,6 +508,35 @@ class _PostComposerState extends State<_PostComposer> {
                   minLines: 4,
                   decoration: const InputDecoration(labelText: 'CONTENIDO'),
                 ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: _isLoading ? null : _pickImages,
+                      icon: const Icon(Icons.image_outlined, size: 16),
+                      label: const Text('ADJUNTAR IMAGEN'),
+                    ),
+                    const Spacer(),
+                    Text(
+                      '${_attachments.length}/${SecurityValidators.maxAttachments}',
+                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                    ),
+                  ],
+                ),
+                if (_attachments.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (var i = 0; i < _attachments.length; i++)
+                        _AttachmentChip(
+                          attachment: _attachments[i],
+                          onRemove: _isLoading ? null : () => _removeAttachment(i),
+                        ),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: 16),
                 SizedBox(
                   height: 48,
@@ -456,5 +570,61 @@ class _PostComposerState extends State<_PostComposer> {
             child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
           )
         : const Icon(Icons.send, size: 16);
+  }
+}
+
+/// Miniatura del adjunto seleccionado con acción para quitarlo.
+class _AttachmentChip extends StatelessWidget {
+  final PostAttachment attachment;
+  final VoidCallback? onRemove;
+
+  const _AttachmentChip({required this.attachment, this.onRemove});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: AppColors.bgPanel,
+        border: Border.all(color: AppColors.winBorder, width: 1),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(2),
+            child: Image.memory(
+              Uint8List.fromList(attachment.bytes),
+              width: 36,
+              height: 36,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => const SizedBox(
+                width: 36,
+                height: 36,
+                child: Icon(Icons.broken_image, size: 18, color: AppColors.textSecondary),
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 110),
+            child: Text(
+              attachment.filename,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: AppColors.textSecondary, fontSize: 10),
+            ),
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+            icon: const Icon(Icons.close, size: 14),
+            color: AppColors.textSecondary,
+            onPressed: onRemove,
+          ),
+        ],
+      ),
+    );
   }
 }

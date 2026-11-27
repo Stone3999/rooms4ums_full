@@ -160,4 +160,27 @@ class WearService {
       return null;
     }
   }
+
+  /// PRÁCTICA 6 - Envía un mensaje directo entre el teléfono y el reloj por BLE.
+  static Future<WearResult> sendChatMessage({
+    required String sender,
+    required String message,
+  }) async {
+    try {
+      final raw = await _channel.invokeMethod<dynamic>('chat', {
+        'sender': sender,
+        'message': message,
+      });
+      final map = raw is Map ? raw : const <String, dynamic>{};
+      final ok = map['ok'] == true;
+      return WearResult(
+        ok,
+        ok ? 'MENSAJE ENVIADO AL RELOJ' : (map['error'] ?? 'ENLACE NO DISPONIBLE').toString(),
+      );
+    } on MissingPluginException {
+      return const WearResult(false, 'PUENTE ANDROID NO DISPONIBLE');
+    } on PlatformException catch (e) {
+      return WearResult(false, e.message ?? 'ERROR AL ENVIAR MENSAJE');
+    }
+  }
 }

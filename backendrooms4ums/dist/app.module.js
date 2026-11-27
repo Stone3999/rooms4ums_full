@@ -23,6 +23,7 @@ const rooms_module_1 = require("./rooms/rooms.module");
 const forum_module_1 = require("./forum/forum.module");
 const search_module_1 = require("./search/search.module");
 const admin_module_1 = require("./admin/admin.module");
+const push_module_1 = require("./push/push.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -49,6 +50,7 @@ exports.AppModule = AppModule = __decorate([
             forum_module_1.ForumModule,
             search_module_1.SearchModule,
             admin_module_1.AdminModule,
+            push_module_1.PushModule,
         ],
         controllers: [app_controller_1.AppController, diagnostic_controller_1.DiagnosticController],
         providers: [app_service_1.AppService],

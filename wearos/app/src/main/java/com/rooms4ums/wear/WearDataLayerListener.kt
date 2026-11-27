@@ -67,8 +67,19 @@ class WearDataLayerListener : WearableListenerService() {
                 val raw = messageEvent.data.toString(Charsets.UTF_8)
                 val room = Regex("\"room\":\"([^\"]*)\"").find(raw)?.groupValues?.get(1) ?: "foro"
                 val title = Regex("\"title\":\"([^\"]*)\"").find(raw)?.groupValues?.get(1) ?: raw
-                Log.i(TAG, "Post creado en $room: $title")
+                Log.i(TAG, "Post creado en $room")
                 Notify.show(this, "${room.uppercase()}: $title")
+            }
+
+            PATH_CHAT -> {
+                val raw = messageEvent.data.toString(Charsets.UTF_8)
+                val json = runCatching { JSONObject(raw) }.getOrNull()
+                val sender = json?.optString("sender")?.ifEmpty { "Smartphone" } ?: "Smartphone"
+                val message = json?.optString("message").orEmpty()
+                if (message.isNotEmpty()) {
+                    Log.i(TAG, "Mensaje recibido de $sender")
+                    Notify.show(this, "$sender: $message")
+                }
             }
 
             else -> Log.i(TAG, "Ruta ignorada: $path")
@@ -102,6 +113,7 @@ class WearDataLayerListener : WearableListenerService() {
         const val PATH_LINK = "/rooms4ums/link"
         const val PATH_OPEN_ROOM = "/rooms4ums/open-room"
         const val PATH_POST_CREATED = "/rooms4ums/post-created"
+        const val PATH_CHAT = "/rooms4ums/chat"
     }
 }
 

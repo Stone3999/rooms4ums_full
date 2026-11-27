@@ -12,6 +12,10 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^1.0.8
   http: ^1.2.0
+  # Práctica 7: tipo MIME explícito en cada parte del multipart/form-data.
+  http_parser: ^4.0.2
+  # Práctica 7: selección de imágenes desde la galería del dispositivo.
+  image_picker: ^1.1.2
   shared_preferences: ^2.2.2
 
   # PRÁCTICA 3 - URLs preasignadas: resolver deep links entrantes.

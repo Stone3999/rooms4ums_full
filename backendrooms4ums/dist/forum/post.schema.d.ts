@@ -8,12 +8,17 @@ export declare class Post {
     roomId: string;
     attachments: {
         url: string;
+        path?: string;
         type: string;
         name: string;
     }[];
     viewCount: number;
     commentCount: number;
     tags: string[];
+    status: string;
+    priority: string;
+    assignedAgentId?: string;
+    idempotencyKey?: string;
 }
 export declare const PostSchema: import("mongoose").Schema<Post, import("mongoose").Model<Post, any, any, any, (Document<unknown, any, Post, any, import("mongoose").DefaultSchemaOptions> & Post & {
     _id: import("mongoose").Types.ObjectId;
@@ -81,6 +86,7 @@ export declare const PostSchema: import("mongoose").Schema<Post, import("mongoos
     }> | undefined;
     attachments?: import("mongoose").SchemaDefinitionProperty<{
         url: string;
+        path?: string;
         type: string;
         name: string;
     }[], Post, Document<unknown, {}, Post, {
@@ -111,6 +117,42 @@ export declare const PostSchema: import("mongoose").Schema<Post, import("mongoos
         id: string;
     }> | undefined;
     tags?: import("mongoose").SchemaDefinitionProperty<string[], Post, Document<unknown, {}, Post, {
+        id: string;
+    }, import("mongoose").DefaultSchemaOptions> & Omit<Post & {
+        _id: import("mongoose").Types.ObjectId;
+    } & {
+        __v: number;
+    }, "id"> & {
+        id: string;
+    }> | undefined;
+    status?: import("mongoose").SchemaDefinitionProperty<string, Post, Document<unknown, {}, Post, {
+        id: string;
+    }, import("mongoose").DefaultSchemaOptions> & Omit<Post & {
+        _id: import("mongoose").Types.ObjectId;
+    } & {
+        __v: number;
+    }, "id"> & {
+        id: string;
+    }> | undefined;
+    priority?: import("mongoose").SchemaDefinitionProperty<string, Post, Document<unknown, {}, Post, {
+        id: string;
+    }, import("mongoose").DefaultSchemaOptions> & Omit<Post & {
+        _id: import("mongoose").Types.ObjectId;
+    } & {
+        __v: number;
+    }, "id"> & {
+        id: string;
+    }> | undefined;
+    assignedAgentId?: import("mongoose").SchemaDefinitionProperty<string | undefined, Post, Document<unknown, {}, Post, {
+        id: string;
+    }, import("mongoose").DefaultSchemaOptions> & Omit<Post & {
+        _id: import("mongoose").Types.ObjectId;
+    } & {
+        __v: number;
+    }, "id"> & {
+        id: string;
+    }> | undefined;
+    idempotencyKey?: import("mongoose").SchemaDefinitionProperty<string | undefined, Post, Document<unknown, {}, Post, {
         id: string;
     }, import("mongoose").DefaultSchemaOptions> & Omit<Post & {
         _id: import("mongoose").Types.ObjectId;

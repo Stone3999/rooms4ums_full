@@ -1,18 +1,21 @@
-import { Test, TestingModule } from '@nestjs/testing';
 import { RoomsController } from './rooms.controller';
 
 describe('RoomsController', () => {
-  let controller: RoomsController;
+  it('delega el listado público en RoomsService (RF-02)', async () => {
+    const rooms = [{ slug: 'general' }];
+    const roomsService = { findAllActive: jest.fn().mockResolvedValue(rooms) };
+    const controller = new RoomsController(roomsService as any);
 
-  beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      controllers: [RoomsController],
-    }).compile();
-
-    controller = module.get<RoomsController>(RoomsController);
+    await expect(controller.getActiveRooms()).resolves.toBe(rooms);
+    expect(roomsService.findAllActive).toHaveBeenCalledTimes(1);
   });
 
-  it('should be defined', () => {
-    expect(controller).toBeDefined();
+  it('delega la consulta por slug', async () => {
+    const room = { slug: 'general' };
+    const roomsService = { findBySlug: jest.fn().mockResolvedValue(room) };
+    const controller = new RoomsController(roomsService as any);
+
+    await expect(controller.getRoomBySlug('general')).resolves.toBe(room);
+    expect(roomsService.findBySlug).toHaveBeenCalledWith('general');
   });
 });

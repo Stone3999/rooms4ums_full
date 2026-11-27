@@ -2,7 +2,26 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart' show MediaType;
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'package:rooms4ums_mobile/core/utils/security_validators.dart';
+
+/// Adjunto listo para enviarse como `multipart/form-data` (Práctica 7).
+///
+/// Se mantiene como bytes + metadatos para que `ApiService` no dependa de
+/// ningún plugin de selección de archivos y pueda probarse con `MockClient`.
+class PostAttachment {
+  final String filename;
+  final String mimeType;
+  final List<int> bytes;
+
+  const PostAttachment({
+    required this.filename,
+    required this.mimeType,
+    required this.bytes,
+  });
+}
 
 /// Cliente HTTP contra el backend NestJS desplegado en Render.
 ///
@@ -18,7 +37,8 @@ class ApiService {
   /// del timeout normal. Por eso el timeout es holgado y hay un reintento.
   static const Duration _timeout = Duration(seconds: 30);
 
-  static const Duration _retryDelay = Duration(seconds: 3);
+  static const Duration _retryBaseDelay = Duration(seconds: 1);
+  static const int _maxNetworkRetries = 2;
 
   static const Map<String, String> _jsonHeaders = {
     'Content-Type': 'application/json',
@@ -49,28 +69,29 @@ class ApiService {
     return 'Error ${response.statusCode} del servidor';
   }
 
-/// Normaliza errores de red (timeout, sin conexión) a mensajes en español.
+  /// Normaliza errores de red (timeout, sin conexión) a mensajes en español.
   ///
-  /// Ante un fallo de red hace UN reintento tras una pausa breve, porque la
-  /// causa habitual en este proyecto es el arranque en frío de Render y no un
-  /// fallo real del servidor.
+  /// Implementa reintentos con espera exponencial (exponential backoff) para
+  /// tolerar caídas breves o el arranque en frío de Render sin saturar la red.
   static Future<T> _guard<T>(
     Future<T> Function() request,
     String fallbackMessage, {
     bool retryOnNetworkError = true,
+    int maxRetries = _maxNetworkRetries,
+    Duration baseDelay = _retryBaseDelay,
   }) async {
     for (var attempt = 0; ; attempt++) {
       try {
         return await request();
       } on TimeoutException {
-        if (retryOnNetworkError && attempt == 0) {
-          await Future<void>.delayed(_retryDelay);
+        if (retryOnNetworkError && attempt < maxRetries) {
+          await Future<void>.delayed(baseDelay * (1 << attempt));
           continue;
         }
         throw Exception('El servidor tardó demasiado en responder. Intenta de nuevo.');
       } on http.ClientException {
-        if (retryOnNetworkError && attempt == 0) {
-          await Future<void>.delayed(_retryDelay);
+        if (retryOnNetworkError && attempt < maxRetries) {
+          await Future<void>.delayed(baseDelay * (1 << attempt));
           continue;
         }
         throw Exception('No se pudo conectar con el servidor. Revisa tu conexión.');
@@ -183,7 +204,7 @@ class ApiService {
             .timeout(_timeout);
 
         if (response.statusCode != 200 && response.statusCode != 201) {
-          throw Exception(_parseError(response));
+          throw Exception(SecurityValidators.sanitizeAuthError(response.statusCode, _parseError(response)));
         }
 
         final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -225,10 +246,34 @@ class ApiService {
             .timeout(_timeout);
 
         if (response.statusCode != 200 && response.statusCode != 201) {
-          throw Exception(_parseError(response));
+          throw Exception(SecurityValidators.sanitizeAuthError(response.statusCode, _parseError(response)));
         }
         return jsonDecode(response.body) as Map<String, dynamic>;
       }, 'No se pudo completar el registro.');
+    } finally {
+      if (client == null) httpClient.close();
+    }
+  }
+
+  /// Obtiene el perfil del usuario autenticado (UID, rol, username).
+  static Future<Map<String, dynamic>> getProfile({http.Client? client}) async {
+    final token = await getToken();
+    if (token == null || token.isEmpty) {
+      throw Exception('Debes iniciar sesión para consultar el perfil.');
+    }
+
+    final httpClient = client ?? http.Client();
+    try {
+      return await _guard(() async {
+        final response = await httpClient
+            .get(
+              _uri('/auth/profile'),
+              headers: {..._jsonHeaders, 'Authorization': 'Bearer $token'},
+            )
+            .timeout(_timeout);
+        if (response.statusCode != 200) throw Exception(_parseError(response));
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }, 'No se pudo obtener el perfil.');
     } finally {
       if (client == null) httpClient.close();
     }
@@ -372,31 +417,144 @@ class ApiService {
     }
   }
 
-  /// Crea un post. Requiere sesión activa (JWT).
+  static String generateIdempotencyKey() {
+    return 'req_${DateTime.now().microsecondsSinceEpoch}';
+  }
+
+  /// Crea un post. Requiere sesión activa (JWT) e incluye clave de idempotencia.
+  ///
+  /// Si se envían adjuntos usa `multipart/form-data` con el campo `files`, que
+  /// es exactamente lo que espera `FilesInterceptor('files', 5)` del backend
+  /// (Práctica 7). Sin adjuntos conserva el contrato JSON original.
   static Future<Map<String, dynamic>> createPost({
     required String roomId,
     required String title,
     required String content,
+    String? status,
+    String? priority,
+    String? idempotencyKey,
+    List<PostAttachment> attachments = const <PostAttachment>[],
     http.Client? client,
   }) async {
     final token = await getToken();
     if (token == null) throw Exception('Debes iniciar sesión para publicar.');
 
+    final attachmentError = SecurityValidators.validateAttachmentList(attachments.length);
+    if (attachmentError != null) throw Exception(attachmentError);
+    for (final attachment in attachments) {
+      final error = SecurityValidators.validateAttachment(
+        filename: attachment.filename,
+        mimeType: attachment.mimeType,
+        bytes: attachment.bytes.length,
+      );
+      if (error != null) throw Exception(error);
+    }
+
+    final key = idempotencyKey ?? generateIdempotencyKey();
     final httpClient = client ?? http.Client();
     try {
       return await _guard(() async {
-        final response = await httpClient
-            .post(
-              _uri('/forum/posts'),
-              headers: {..._jsonHeaders, 'Authorization': 'Bearer $token'},
-              body: jsonEncode({'roomId': roomId, 'title': title, 'content': content}),
-            )
-            .timeout(_timeout);
+        final http.Response response;
+        if (attachments.isEmpty) {
+          final payload = <String, dynamic>{
+            'roomId': roomId,
+            'title': title,
+            'content': content,
+            'status': ?status,
+            'priority': ?priority,
+          };
+          response = await httpClient
+              .post(
+                _uri('/forum/posts'),
+                headers: {
+                  ..._jsonHeaders,
+                  'Authorization': 'Bearer $token',
+                  'X-Idempotency-Key': key,
+                },
+                body: jsonEncode(payload),
+              )
+              .timeout(_timeout);
+        } else {
+          final request = http.MultipartRequest('POST', _uri('/forum/posts'))
+            ..headers.addAll({
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $token',
+              'X-Idempotency-Key': key,
+            })
+            ..fields['roomId'] = roomId
+            ..fields['title'] = title
+            ..fields['content'] = content;
+          if (status != null) request.fields['status'] = status;
+          if (priority != null) request.fields['priority'] = priority;
+          for (final attachment in attachments) {
+            request.files.add(
+              http.MultipartFile.fromBytes(
+                'files',
+                attachment.bytes,
+                filename: attachment.filename,
+                contentType: MediaType.parse(attachment.mimeType),
+              ),
+            );
+          }
+          final streamed = await httpClient.send(request).timeout(_timeout);
+          response = await http.Response.fromStream(streamed);
+        }
+
         if (response.statusCode != 200 && response.statusCode != 201) {
           throw Exception(_parseError(response));
         }
         return jsonDecode(response.body) as Map<String, dynamic>;
       }, 'No se pudo publicar el mensaje.');
+    } finally {
+      if (client == null) httpClient.close();
+    }
+  }
+
+  /// Actualiza un post propio (estado, prioridad, título o contenido).
+  static Future<Map<String, dynamic>> updatePost(
+    String postId,
+    Map<String, dynamic> updates, {
+    http.Client? client,
+  }) async {
+    final token = await getToken();
+    if (token == null) throw Exception('Debes iniciar sesión para editar.');
+
+    final httpClient = client ?? http.Client();
+    try {
+      return await _guard(() async {
+        final response = await httpClient
+            .patch(
+              _uri('/forum/posts/$postId'),
+              headers: {..._jsonHeaders, 'Authorization': 'Bearer $token'},
+              body: jsonEncode(updates),
+            )
+            .timeout(_timeout);
+        if (response.statusCode != 200) throw Exception(_parseError(response));
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }, 'No se pudo actualizar el post.');
+    } finally {
+      if (client == null) httpClient.close();
+    }
+  }
+
+  /// Elimina un post propio.
+  static Future<void> deletePost(String postId, {http.Client? client}) async {
+    final token = await getToken();
+    if (token == null) throw Exception('Debes iniciar sesión para eliminar.');
+
+    final httpClient = client ?? http.Client();
+    try {
+      await _guard(() async {
+        final response = await httpClient
+            .delete(
+              _uri('/forum/posts/$postId'),
+              headers: {..._jsonHeaders, 'Authorization': 'Bearer $token'},
+            )
+            .timeout(_timeout);
+        if (response.statusCode != 200 && response.statusCode != 204) {
+          throw Exception(_parseError(response));
+        }
+      }, 'No se pudo eliminar el post.');
     } finally {
       if (client == null) httpClient.close();
     }
@@ -427,17 +585,27 @@ class ApiService {
     }
   }
 
-  static Future<void> createComment(String postId, String content, {http.Client? client}) async {
+  static Future<void> createComment(
+    String postId,
+    String content, {
+    String? idempotencyKey,
+    http.Client? client,
+  }) async {
     final token = await getToken();
     if (token == null) throw Exception('Debes iniciar sesión para comentar.');
 
+    final key = idempotencyKey ?? generateIdempotencyKey();
     final httpClient = client ?? http.Client();
     try {
       await _guard(() async {
         final response = await httpClient
             .post(
               _uri('/forum/posts/$postId/comments'),
-              headers: {..._jsonHeaders, 'Authorization': 'Bearer $token'},
+              headers: {
+                ..._jsonHeaders,
+                'Authorization': 'Bearer $token',
+                'X-Idempotency-Key': key,
+              },
               body: jsonEncode({'content': content}),
             )
             .timeout(_timeout);

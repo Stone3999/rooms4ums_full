@@ -45,6 +45,9 @@ exports.envValidationSchema = Joi.object({
     REDIS_HOST: Joi.string().required(),
     REDIS_PORT: Joi.number().default(6379),
     REDIS_PASSWORD: Joi.string().allow('').default(''),
+    SUPABASE_SERVICE_ROLE_KEY: Joi.string().allow('').optional(),
     SUPABASE_BUCKET_NAME: Joi.string().default('avatars'),
+    FIREBASE_SERVICE_ACCOUNT_PATH: Joi.string().allow('').optional(),
+    FIREBASE_SERVICE_ACCOUNT_JSON: Joi.string().allow('').optional(),
 });
 //# sourceMappingURL=env.validation.js.map

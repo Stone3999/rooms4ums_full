@@ -6,6 +6,19 @@ import 'package:flutter/material.dart';
 import 'package:rooms4ums_mobile/core/services/api_service.dart';
 import 'package:rooms4ums_mobile/core/services/wear_service.dart';
 import 'package:rooms4ums_mobile/core/theme/app_colors.dart';
+import 'package:rooms4ums_mobile/core/utils/security_validators.dart';
+
+class _DeviceChatMessage {
+  final String sender;
+  final String body;
+  final String time;
+
+  const _DeviceChatMessage({
+    required this.sender,
+    required this.body,
+    required this.time,
+  });
+}
 
 /// PRÁCTICA 2 - Apartado para conectar el reloj desde el celular.
 ///
@@ -24,6 +37,13 @@ class _WearableScreenState extends State<WearableScreen> {
   WearTelemetry? _telemetry;
   Timer? _timer;
 
+  final _messageController = TextEditingController();
+  final List<_DeviceChatMessage> _messages = <_DeviceChatMessage>[];
+  bool _senderIsPhone = true;
+  int _phoneSentCount = 0;
+  int _watchSentCount = 0;
+  String? _chatError;
+
   bool _loading = true;
   bool _busy = false;
 
@@ -37,6 +57,7 @@ class _WearableScreenState extends State<WearableScreen> {
   @override
   void dispose() {
     _timer?.cancel();
+    _messageController.dispose();
     super.dispose();
   }
 
@@ -108,6 +129,59 @@ class _WearableScreenState extends State<WearableScreen> {
     );
   }
 
+  String _formatNow() {
+    final now = DateTime.now();
+    final hh = now.hour.toString().padLeft(2, '0');
+    final mm = now.minute.toString().padLeft(2, '0');
+    final ss = now.second.toString().padLeft(2, '0');
+    return '$hh:$mm:$ss';
+  }
+
+  Future<void> _sendDeviceMessage() async {
+    final raw = _messageController.text;
+    final validation = SecurityValidators.validateMessage(raw);
+    if (validation != null) {
+      setState(() => _chatError = validation.toUpperCase());
+      return;
+    }
+
+    final text = raw.trim();
+    final watchName = (_status?.nodes.isNotEmpty ?? false) ? _status!.nodes.first.name : 'Wear OS';
+    final senderName = _senderIsPhone ? 'Smartphone (A)' : '$watchName (B)';
+
+    setState(() {
+      _chatError = null;
+      _messages.insert(
+        0,
+        _DeviceChatMessage(sender: senderName, body: text, time: _formatNow()),
+      );
+      if (_senderIsPhone) {
+        _phoneSentCount++;
+      } else {
+        _watchSentCount++;
+      }
+      _messageController.clear();
+    });
+
+    if (_senderIsPhone && (_status?.connected ?? false)) {
+      final result = await WearService.sendChatMessage(sender: 'Smartphone', message: text);
+      if (!mounted) return;
+      _snack(result.ok ? 'ENVIADO POR BLE AL RELOJ' : 'GUARDADO LOCAL (${result.message})');
+    } else {
+      _snack('MENSAJE ENVIADO POR $senderName');
+    }
+  }
+
+  void _clearChatHistory() {
+    setState(() {
+      _messages.clear();
+      _phoneSentCount = 0;
+      _watchSentCount = 0;
+      _chatError = null;
+    });
+    _snack('HISTORIAL LIMPIADO');
+  }
+
   @override
   Widget build(BuildContext context) {
     final status = _status;
@@ -139,6 +213,8 @@ class _WearableScreenState extends State<WearableScreen> {
                 const SizedBox(height: 12),
               ],
               _telemetryPanel(),
+              const SizedBox(height: 12),
+              _deviceChatPanel(status),
               const SizedBox(height: 12),
               _actions(connected),
               const SizedBox(height: 16),
@@ -306,6 +382,148 @@ class _WearableScreenState extends State<WearableScreen> {
             label,
             style: const TextStyle(color: AppColors.textSecondary, fontSize: 8, letterSpacing: 1),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _deviceChatPanel(WearStatus? status) {
+    final watchName = (status?.nodes.isNotEmpty ?? false) ? status!.nodes.first.name : 'Wear OS';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: WinBorders.panel(borderWidth: 1),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'INTERACCIÓN ENTRE DISPOSITIVOS (PRÁCTICA 6)',
+                  style: TextStyle(color: AppColors.accent, fontSize: 9, letterSpacing: 1),
+                ),
+              ),
+              if (_messages.isNotEmpty)
+                TextButton(
+                  onPressed: _clearChatHistory,
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFFFF7777),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: const Text('LIMPIAR', style: TextStyle(fontSize: 9)),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'A: Smartphone  |  B: $watchName',
+            style: const TextStyle(color: AppColors.textPrimary, fontSize: 10),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'ENVIADOS A: $_phoneSentCount   ·   ENVIADOS B: $_watchSentCount',
+            style: const TextStyle(color: AppColors.textSecondary, fontSize: 9, letterSpacing: 0.6),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => setState(() => _senderIsPhone = true),
+                  style: OutlinedButton.styleFrom(
+                    backgroundColor: _senderIsPhone ? AppColors.accent : Colors.transparent,
+                    foregroundColor: _senderIsPhone ? Colors.black : AppColors.textSecondary,
+                    side: BorderSide(color: _senderIsPhone ? AppColors.accent : AppColors.winBorder),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    shape: const RoundedRectangleBorder(),
+                  ),
+                  child: const Text('EMISOR: A (TEL)', style: TextStyle(fontSize: 9)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => setState(() => _senderIsPhone = false),
+                  style: OutlinedButton.styleFrom(
+                    backgroundColor: !_senderIsPhone ? AppColors.accent : Colors.transparent,
+                    foregroundColor: !_senderIsPhone ? Colors.black : AppColors.textSecondary,
+                    side: BorderSide(color: !_senderIsPhone ? AppColors.accent : AppColors.winBorder),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    shape: const RoundedRectangleBorder(),
+                  ),
+                  child: const Text('EMISOR: B (RELOJ)', style: TextStyle(fontSize: 9)),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _messageController,
+                  maxLength: SecurityValidators.maxMessageLength,
+                  style: const TextStyle(fontSize: 11),
+                  decoration: const InputDecoration(
+                    hintText: 'Mensaje breve...',
+                    counterText: '',
+                    isDense: true,
+                  ),
+                  onSubmitted: (_) => _sendDeviceMessage(),
+                ),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton(
+                onPressed: _sendDeviceMessage,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.accent,
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  shape: const RoundedRectangleBorder(),
+                ),
+                child: const Icon(Icons.send, size: 16),
+              ),
+            ],
+          ),
+          if (_chatError != null) ...[
+            const SizedBox(height: 6),
+            Text(_chatError!, style: const TextStyle(color: Color(0xFFFF7777), fontSize: 9)),
+          ],
+          if (_messages.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            const Divider(color: AppColors.winBorder, height: 1),
+            const SizedBox(height: 8),
+            for (final msg in _messages.take(10))
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '[${msg.time}] ',
+                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 9),
+                    ),
+                    Expanded(
+                      child: RichText(
+                        text: TextSpan(
+                          style: const TextStyle(fontSize: 10, color: AppColors.textPrimary),
+                          children: [
+                            TextSpan(
+                              text: '${msg.sender}: ',
+                              style: const TextStyle(color: AppColors.accent, fontWeight: FontWeight.bold),
+                            ),
+                            TextSpan(text: msg.body),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
         ],
       ),
     );

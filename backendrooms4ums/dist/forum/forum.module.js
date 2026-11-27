@@ -15,6 +15,7 @@ const forum_controller_1 = require("./forum.controller");
 const posts_service_1 = require("./posts.service");
 const comments_service_1 = require("./comments.service");
 const storage_module_1 = require("../storage/storage.module");
+const push_module_1 = require("../push/push.module");
 let ForumModule = class ForumModule {
 };
 exports.ForumModule = ForumModule;
@@ -26,6 +27,7 @@ exports.ForumModule = ForumModule = __decorate([
                 { name: comment_schema_1.Comment.name, schema: comment_schema_1.CommentSchema },
             ]),
             storage_module_1.StorageModule,
+            push_module_1.PushModule,
         ],
         controllers: [forum_controller_1.ForumController],
         providers: [posts_service_1.PostsService, comments_service_1.CommentsService],

@@ -1,0 +1,370 @@
+ADAPTACION DE LAS PRACTICAS 1 A 14
+ROOMS4UMS MOBILE
+Comprehensive Mobile Development - 10.° cuatrimestre
+Alumno: David Eduardo Quiroz Rivera | Matricula: 2023371160
+
+===============================================================================
+ALCANCE Y ESTADO DEL PROYECTO
+===============================================================================
+
+ROOMS4UMS es una plataforma de foros tematicos. Esta entrega adapta las
+practicas del curso al cliente movil Flutter y a sus componentes reales:
+
+  Aplicacion web: rooms4ums/ (Angular)
+  Aplicacion movil: rooms4umsmobile/ (Flutter, Android)
+  Backend: backendrooms4ums/ (NestJS)
+  Wear OS: wearos/ (Android/Kotlin)
+  Servicios de datos: PostgreSQL/Supabase, MongoDB, Redis y SQLite local.
+
+La app movil consume la API compartida del proyecto. No se sustituyen sus
+tecnologias por Firebase ni se presentan emulaciones como pruebas de hardware.
+Las adaptaciones se documentan con estos estados:
+
+  IMPLEMENTADO: existe codigo funcional en el repositorio.
+  IMPLEMENTADO; EVIDENCIA PENDIENTE: existe codigo, falta comprobarlo en el
+      entorno fisico/remoto indicado.
+  PENDIENTE: falta ejecutar o documentar una actividad que requiere evidencia.
+
+Tener una funcion implementada no implica que su prueba de aceptacion ya haya
+sido ejecutada. Las mediciones de carga, las pruebas con dos dispositivos
+fisicos y la ejecucion remota de GitHub Actions no se inventan.
+
+
+===============================================================================
+PRACTICA 1 - SOFTWARE DE DISPOSITIVO Y SISTEMAS EMBEBIDOS (WEAR OS)
+===============================================================================
+
+Adaptacion: el programa corre en el reloj Wear OS y consulta su acelerometro y
+giroscopio mediante SensorManager. TelemetryService publica magnitud, ejes,
+marca de tiempo, deteccion de movimiento y bateria. Se ejecuta como servicio
+en primer plano; limita la lectura/publicacion a 1 Hz para reducir consumo.
+
+Archivos principales:
+  wearos/app/src/main/java/com/rooms4ums/wear/TelemetryService.kt
+  wearos/app/src/main/java/com/rooms4ums/wear/MainActivity.kt
+
+Precision tecnica: Wear OS ya contiene firmware del fabricante. Lo entregado
+es software de dispositivo/aplicacion que se ejecuta en hardware real; no se
+afirma haber creado ni reemplazado el firmware del reloj. El servicio usa el
+ciclo de vida Android y SensorEventListener, no las funciones Arduino setup()
+y loop().
+
+Estado: IMPLEMENTADO. Validar sensores, permisos, servicio persistente y gasto
+de bateria en un reloj fisico sigue pendiente si la evaluacion exige hardware.
+
+
+===============================================================================
+PRACTICA 2 - SENSOR Y COMUNICACION ENTRE DISPOSITIVOS (IOT)
+===============================================================================
+
+Adaptacion: el reloj transmite telemetria al telefono por Google Wearable Data
+Layer, sobre la conexion administrada por Google Play Services (normalmente
+Bluetooth cuando los dispositivos estan emparejados). DataClient conserva y
+sincroniza datos; MessageClient se utiliza para eventos inmediatos. El telefono
+expone estado de nodos, telemetria y acciones del reloj a la interfaz Flutter
+mediante un MethodChannel.
+
+Archivos principales:
+  wearos/.../TelemetryService.kt
+  wearos/.../WearDataLayerListener.kt
+  rooms4umsmobile/android/app/src/main/kotlin/com/stone3999/rooms4ums_mobile/MainActivity.kt
+  rooms4umsmobile/lib/core/services/wear_service.dart
+
+La lectura del acelerometro y giroscopio sustituye el sensor infrarrojo
+independiente de la practica original; ambos casos integran un sensor fisico
+con un cliente movil, pero no son el mismo sensor ni el mismo montaje.
+
+Estado: IMPLEMENTADO; EVIDENCIA PENDIENTE de una ejecucion reloj-telefono
+emparejados. Las pruebas locales no sustituyen esa evidencia.
+
+
+===============================================================================
+PRACTICA 3 - URL PREASIGNADA, API REST Y DEEP LINKS
+===============================================================================
+
+Adaptacion: ApiService consume endpoints REST configurados para el backend.
+DeepLinkService crea e interpreta enlaces de navegacion:
+  rooms4ums://home
+  rooms4ums://popular
+  rooms4ums://room/<slug>
+  rooms4ums://post/<id>
+
+Los enlaces pueden abrirse desde notificaciones o compartirse desde el detalle
+de un post. Son rutas de la aplicacion, no URL firmadas de archivos. Para los
+adjuntos, StorageService incluye URL firmadas con expiracion; si la firma falla
+el servicio registra la advertencia y usa la URL publica como alternativa.
+Debe confirmarse la configuracion efectiva del entorno desplegado antes de
+afirmar que todos los adjuntos quedan privados.
+
+Archivos principales:
+  rooms4umsmobile/lib/core/services/api_service.dart
+  rooms4umsmobile/lib/core/services/deep_link_service.dart
+  rooms4umsmobile/lib/ui/navigation/app_router.dart
+  backendrooms4ums/src/storage/storage.service.ts
+
+Estado: IMPLEMENTADO. La ruta de ida y vuelta del deep link tiene pruebas
+automatizadas; la configuracion de almacenamiento en produccion requiere
+verificacion del entorno.
+
+
+===============================================================================
+PRACTICA 4 - ALMACENAMIENTO ESTRUCTURADO
+===============================================================================
+
+Adaptacion: SQLite mediante sqflite guarda cache estructurada de salas y posts
+en rooms_cache y posts_cache, con claves e indices. La cache de posts vence a
+los 15 minutos y la de salas a las 6 horas. La app intenta la red primero y
+usa la cache disponible cuando no puede obtener datos del servidor.
+
+El token de sesion se conserva fuera de SQLite, en SharedPreferences; esto lo
+separa de la cache de contenido, pero no equivale por si solo a cifrado de
+credenciales. La cache LRU de imagenes es independiente de las tablas SQLite.
+
+Archivos principales:
+  rooms4umsmobile/lib/data/local/local_database.dart
+  rooms4umsmobile/lib/data/local/image_cache.dart
+  rooms4umsmobile/lib/core/services/api_service.dart
+
+Estado: IMPLEMENTADO. Faltan pruebas focalizadas adicionales para persistencia
+y expiracion de SQLite si se requiere evidenciar cobertura de esas operaciones.
+
+
+===============================================================================
+PRACTICA 5 - CODIGO SEGURO EN APLICACIONES MOVILES
+===============================================================================
+
+Adaptacion: las pantallas reales de acceso y registro validan campos vacios,
+espacios, formato de correo y limites de longitud. La contrasena se oculta en
+la interfaz; los errores de autenticacion se normalizan para no revelar
+detalles internos. Se centralizaron reglas de entradas en SecurityValidators.
+
+Archivos principales:
+  rooms4umsmobile/lib/core/utils/security_validators.dart
+  rooms4umsmobile/lib/ui/screens/login_screen.dart
+  rooms4umsmobile/lib/ui/screens/register_screen.dart
+  rooms4umsmobile/lib/core/services/push_service.dart
+  wearos/.../WearDataLayerListener.kt
+
+La validacion cliente mejora la experiencia, pero no reemplaza autenticacion,
+autorizacion ni validacion en el backend. La interfaz no imprime contrasenas o
+JWT como parte de su flujo normal.
+
+Estado: IMPLEMENTADO, con pruebas unitarias y de widget en el proyecto.
+
+
+===============================================================================
+PRACTICA 6 - INTERACCION ENTRE DISPOSITIVOS
+===============================================================================
+
+Adaptacion: la pantalla Wearable permite probar el intercambio de mensajes
+entre los emisores A (telefono) y B (reloj), con validacion de texto, hora,
+contadores y limpieza del historial. Ademas, WearService expone el envio
+directo telefono-reloj por MessageClient a traves del canal BLE/Data Layer.
+El reloj recibe mensajes y muestra notificaciones.
+
+Archivos principales:
+  rooms4umsmobile/lib/ui/screens/wearable_screen.dart
+  rooms4umsmobile/lib/core/services/wear_service.dart
+  rooms4umsmobile/android/app/src/main/kotlin/com/stone3999/rooms4ums_mobile/MainActivity.kt
+  wearos/.../WearDataLayerListener.kt
+
+La interfaz de prueba puede representar dos emisores localmente. Esa vista
+simulada no demuestra por si sola que dos dispositivos fisicos intercambien
+mensajes. La validacion automatizada disponible comprueba vacios, contadores y
+limpieza; la prueba con reloj emparejado queda pendiente de evidencia.
+
+Estado: IMPLEMENTADO; EVIDENCIA FISICA PENDIENTE.
+
+
+===============================================================================
+PRACTICA 7 - ROLES, ATENCION DE CASOS Y ADJUNTOS
+===============================================================================
+
+Adaptacion: los posts pueden representar incidencias o solicitudes de soporte.
+El backend incorpora estado, prioridad, asignacion de agente y una operacion
+de asignacion reservada al administrador. La app permite elegir imagenes y
+enviar publicaciones con multipart/form-data usando el campo "files", con
+validacion de tipo, cantidad y tamano antes del envio.
+
+Politica movil documentada:
+  Tipos: JPG/JPEG, PNG y WebP.
+  Maximo: 5 imagenes por publicacion; 3 MB por imagen.
+
+Archivos principales:
+  backendrooms4ums/src/forum/forum.controller.ts
+  backendrooms4ums/src/forum/posts.service.ts
+  backendrooms4ums/src/forum/dto/forum.dto.ts
+  rooms4umsmobile/lib/core/services/api_service.dart
+  rooms4umsmobile/lib/ui/screens/room_screen.dart
+
+Estado: FUNCIONALIDAD IMPLEMENTADA y hay pruebas de contrato multipart y
+validaciones. La demostracion integral con cuatro cuentas/roles y reasignacion
+en tiempo real requiere cuentas, entorno y evidencia; no se declara ejecutada.
+
+
+===============================================================================
+PRACTICA 8 - PRUEBAS DE CAJA NEGRA (BLACK BOX)
+===============================================================================
+
+Adaptacion: se evalua el comportamiento observable sin depender de la
+implementacion interna. Esta matriz propone criterios reproducibles; el
+resultado manual se debe completar durante la ejecucion y no se presume.
+
+ID     Caso                         Criterio de aceptacion
+BB-01  Inicio de sesion valido      Accede con credenciales correctas.
+BB-02  Inicio invalido              Rechaza el acceso sin mostrar trazas.
+BB-03  Entrada solo con espacios    El formulario la rechaza.
+BB-04  Contrasena fuera de limite   Rechaza menos de 8 o mas de 64 caracteres.
+BB-05  Sala disponible              Muestra datos recibidos del backend.
+BB-06  Sala sin conexion            Muestra cache si existe e indica modo offline.
+BB-07  Publicar post                Devuelve confirmacion tras respuesta del API.
+BB-08  Adjuntar imagen              Envia multipart bajo "files".
+BB-09  Tipo/tamano invalido         Rechaza el adjunto antes de enviarlo.
+BB-10  Deep link de post            Navega al post identificado.
+BB-11  Modificar post ajeno         Backend deniega la operacion no autorizada.
+BB-12  Respuesta de error API       Presenta error controlado, sin falso exito.
+
+Estado: matriz adaptada; algunas rutas tienen pruebas automatizadas. Completar
+capturas/resultados de caja negra para cada caso es pendiente.
+
+
+===============================================================================
+PRACTICA 9 - BASE DE DATOS COMPARTIDA ENTRE DISPOSITIVOS
+===============================================================================
+
+Adaptacion: Firebase/Firestore se sustituye por la arquitectura real del
+proyecto. PostgreSQL/Supabase gestiona usuarios y datos relacionales; MongoDB
+almacena posts y comentarios; Redis sirve sesiones/voz; SQLite contiene cache
+local. Los clientes movil y web consultan el mismo backend NestJS, que es el
+punto de acceso a los datos remotos.
+
+Matriz de ejecucion en dos dispositivos:
+DB-01 Ambos dispositivos acceden al mismo backend.
+DB-02 Crear un post desde A y confirmar respuesta del API.
+DB-03 Consultar el post creado desde B.
+DB-04 Crear otro post desde B y consultarlo desde A.
+DB-05 Actualizar estado/prioridad y revisar el cambio cruzado.
+DB-06 Probar dos modificaciones y registrar la politica de concurrencia.
+DB-07 Cerrar/reabrir y confirmar persistencia en servidor.
+DB-08 Perder red durante una lectura y revisar el estado/cache.
+DB-09 Perder red durante una escritura y comprobar que no se anuncie exito falso.
+
+La app contiene cliente CRUD, almacenamiento remoto y control de version en
+actualizaciones; la ejecucion con dos dispositivos reales no se registra como
+hecha sin evidencia.
+
+Estado: ARQUITECTURA IMPLEMENTADA; matriz DB-01 a DB-09 pendiente de ejecucion
+cruzada y captura de resultados.
+
+
+===============================================================================
+PRACTICA 10 - AUTENTICACION, AUTORIZACION Y DATOS COMPARTIDOS
+===============================================================================
+
+Adaptacion: el JWT identifica al usuario en el backend. El servidor deriva el
+autor del token y aplica permisos por propiedad/rol para actualizar o borrar
+posts; los DTOs rechazan campos no permitidos como authorId. La version del
+registro permite detectar conflictos de actualizacion. La aplicacion muestra
+el identificador del usuario autenticado para distinguir sesiones.
+
+Matriz de seguridad a completar en el entorno de pruebas:
+SEG-01 Login valido; SEG-02 login invalido; SEG-03 creacion propia;
+SEG-04 suplantacion de propietario; SEG-05 lectura ajena; SEG-06 actualizacion
+ajena; SEG-07 eliminacion ajena; SEG-08 actualizacion permitida;
+SEG-09 cambio de authorId; SEG-10 solicitud sin JWT.
+
+El backend tiene pruebas automatizadas de permisos y proteccion de propietario.
+La matriz completa contra un backend activo requiere ejecucion manual
+autorizada. StorageService genera enlaces firmados por defecto, pero puede
+usar URL publica como alternativa ante fallo; se debe revisar la configuracion
+del bucket antes de afirmar privacidad garantizada.
+
+Estado: CONTROLES IMPLEMENTADOS; ejecucion completa de SEG-01 a SEG-10 pendiente.
+
+
+===============================================================================
+PRACTICA 11 - PRUEBAS WHITE BOX
+===============================================================================
+
+Adaptacion: se revisan rutas internas de Flutter, Wear OS y NestJS. Metodos
+criticos candidatos:
+  SecurityValidators.validatePassword (validacion).
+  DeepLinkService.parse (ruteo/procesamiento).
+  ApiService._guard y LocalDatabase.cachedPosts (red/persistencia).
+
+La validacion tecnica incluye Flutter analyze/test, pruebas Gradle del wearable,
+build y pruebas Jest del backend. Los casos existentes cubren limites de
+validadores, errores HTTP, enlaces, adjuntos y permisos. Para completar la
+entrega de White Box se debe adjuntar la cobertura por modulo, grafos de flujo
+de control y mediciones verificables; no se asignan porcentajes sin un reporte.
+
+Estado: ANALISIS Y PRUEBAS AUTOMATIZADAS DISPONIBLES; informe de cobertura,
+CFG, pruebas de carga/latencia e inventario de defectos con evidencia pendiente.
+
+
+===============================================================================
+PRACTICA 12 - OPTIMIZACION, ESTRÉS Y RESILIENCIA
+===============================================================================
+
+Adaptacion ya presente en el codigo:
+  - ApiService utiliza reintentos con backoff exponencial.
+  - Creacion de posts/comentarios acepta X-Idempotency-Key para reintentos.
+  - Los listados del backend seleccionan campos y usan lean() en consultas.
+  - La app utiliza cache local de salas/posts y cache de imagenes.
+  - Los posts admiten version esperada para detectar conflictos.
+
+Se debe medir antes/despues en un ambiente propio o autorizado. Registrar
+promedio, P90/P95, maximo, RPS, porcentaje de error, bytes, latencia HTTP y
+consumo de CPU/RAM. La carga propuesta es de 1, 5 y 10 usuarios con al menos
+20 solicitudes por escenario. No ejecutar carga contra produccion sin permiso.
+
+Estado: MEJORAS IMPLEMENTADAS; profiling, escenarios RES-01 a RES-08 y tabla
+cuantitativa PER-01 a PER-11 pendientes de medicion.
+
+
+===============================================================================
+PRACTICA 13 - AUTOMATIZACION DE PRUEBAS
+===============================================================================
+
+Adaptacion: Flutter usa flutter_test para validadores, formularios, Wearable,
+API, multipart e idempotencia. Wear OS dispone de pruebas JVM para logica
+aislada; NestJS cuenta con pruebas Jest para autorizacion, versionado e
+idempotencia. Los dobles de red permiten probar respuestas HTTP sin enviar
+solicitudes a usuarios o servicios reales.
+
+Archivos de referencia:
+  rooms4umsmobile/test/security_and_resilience_test.dart
+  rooms4umsmobile/test/widget_test.dart
+  wearos/app/src/test/java/com/rooms4ums/wear/WearLogicTest.kt
+  backendrooms4ums/src/forum/posts.service.spec.ts
+
+Estado: PRUEBAS AUTOMATIZADAS IMPLEMENTADAS. Adjuntar el resultado de ejecucion
+completo y la cobertura generada en la version final.
+
+
+===============================================================================
+PRACTICA 14 - INTEGRACION Y VALIDACION CONTINUA (CI)
+===============================================================================
+
+Adaptacion: .github/workflows/ci.yml configura trabajos en push y pull request:
+  Flutter: pub get, flutter analyze y flutter test --coverage.
+  Wear OS: Gradle test y lint.
+  Backend: npm ci, build y Jest.
+
+Estado: PIPELINE CONFIGURADO. La ejecucion automatica en GitHub depende de
+subir los cambios a una rama y abrir/actualizar un pull request; la evidencia
+remota no se sustituye por la existencia del archivo YAML.
+
+
+===============================================================================
+CONCLUSION
+===============================================================================
+
+Las practicas 1 a 14 se vinculan a funciones y componentes concretos de
+ROOMS4UMS, respetando la arquitectura Flutter, NestJS, Wear OS y bases de datos
+existente. Las capacidades de sensores, enlaces, almacenamiento, validacion,
+roles, adjuntos, resiliencia y automatizacion tienen implementacion en el
+repositorio. Quedan como trabajo de evidencia, y no como funciones supuestas,
+las pruebas fisicas reloj-telefono, la matriz cruzada de dos dispositivos,
+algunas pruebas manuales de seguridad, las metricas cuantitativas y la corrida
+remota de CI.

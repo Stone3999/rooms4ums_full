@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:rooms4ums_mobile/core/services/api_service.dart';
 import 'package:rooms4ums_mobile/core/theme/app_colors.dart';
+import 'package:rooms4ums_mobile/core/utils/security_validators.dart';
 import 'package:rooms4ums_mobile/ui/navigation/main_shell.dart';
 import 'package:rooms4ums_mobile/ui/widgets/auth_form_scaffold.dart';
 
@@ -87,19 +88,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
-  String? _validateEmail(String? value) {
-    final email = value?.trim() ?? '';
-    if (email.isEmpty) return 'Escribe tu correo';
-    if (!email.contains('@') || !email.contains('.')) return 'Correo no válido';
-    return null;
-  }
+  String? _validateEmail(String? value) => SecurityValidators.validateEmail(value);
 
-  String? _validatePassword(String? value) {
-    final password = value ?? '';
-    if (password.isEmpty) return 'Escribe una contraseña';
-    if (password.length < 6) return 'Mínimo 6 caracteres';
-    return null;
-  }
+  String? _validatePassword(String? value) => SecurityValidators.validatePassword(value);
 
   @override
   Widget build(BuildContext context) {
@@ -118,24 +109,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
           controller: _usernameController,
           textInputAction: TextInputAction.next,
           autocorrect: false,
-          decoration: const InputDecoration(labelText: 'USUARIO'),
-          validator: (value) =>
-              (value == null || value.trim().isEmpty) ? 'Elige un nombre de usuario' : null,
+          maxLength: SecurityValidators.maxUsernameLength,
+          decoration: const InputDecoration(labelText: 'USUARIO', counterText: ''),
+          validator: SecurityValidators.validateUsername,
         ),
         TextFormField(
           controller: _emailController,
           keyboardType: TextInputType.emailAddress,
           textInputAction: TextInputAction.next,
           autocorrect: false,
-          decoration: const InputDecoration(labelText: 'CORREO ELECTRÓNICO'),
+          maxLength: SecurityValidators.maxEmailLength,
+          decoration: const InputDecoration(labelText: 'CORREO ELECTRÓNICO', counterText: ''),
           validator: _validateEmail,
         ),
         TextFormField(
           controller: _passwordController,
           obscureText: _obscurePassword,
           textInputAction: TextInputAction.next,
+          maxLength: SecurityValidators.maxPasswordLength,
           decoration: InputDecoration(
             labelText: 'CONTRASEÑA',
+            counterText: '',
             suffixIcon: IconButton(
               icon: Icon(_obscurePassword ? Icons.visibility : Icons.visibility_off, size: 18),
               color: AppColors.textSecondary,

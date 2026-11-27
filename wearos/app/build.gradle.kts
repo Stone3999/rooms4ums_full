@@ -54,4 +54,7 @@ dependencies {
 
     // Telemetría y registro del token fuera del hilo principal
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
 }

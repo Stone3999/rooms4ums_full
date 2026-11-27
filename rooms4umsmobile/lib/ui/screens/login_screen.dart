@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:rooms4ums_mobile/core/services/api_service.dart';
 import 'package:rooms4ums_mobile/core/services/push_service.dart';
 import 'package:rooms4ums_mobile/core/theme/app_colors.dart';
+import 'package:rooms4ums_mobile/core/utils/security_validators.dart';
 import 'package:rooms4ums_mobile/ui/navigation/main_shell.dart';
 import 'package:rooms4ums_mobile/ui/widgets/auth_form_scaffold.dart';
 
@@ -78,25 +79,29 @@ class _LoginScreenState extends State<LoginScreen> {
           controller: _identifierController,
           textInputAction: TextInputAction.next,
           autocorrect: false,
-          decoration: const InputDecoration(labelText: 'USUARIO O CORREO'),
-          validator: (value) =>
-              (value == null || value.trim().isEmpty) ? 'Escribe tu usuario o correo' : null,
+          maxLength: SecurityValidators.maxIdentifierLength,
+          decoration: const InputDecoration(
+            labelText: 'USUARIO O CORREO',
+            counterText: '',
+          ),
+          validator: SecurityValidators.validateIdentifier,
         ),
         TextFormField(
           controller: _passwordController,
           obscureText: _obscurePassword,
           textInputAction: TextInputAction.done,
+          maxLength: SecurityValidators.maxPasswordLength,
           onFieldSubmitted: (_) => _handleLogin(),
           decoration: InputDecoration(
             labelText: 'CONTRASEÑA',
+            counterText: '',
             suffixIcon: IconButton(
               icon: Icon(_obscurePassword ? Icons.visibility : Icons.visibility_off, size: 18),
               color: AppColors.textSecondary,
               onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
             ),
           ),
-          validator: (value) =>
-              (value == null || value.isEmpty) ? 'Escribe tu contraseña' : null,
+          validator: SecurityValidators.validatePassword,
         ),
       ],
       footer: const Text(

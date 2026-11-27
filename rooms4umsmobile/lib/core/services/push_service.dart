@@ -66,7 +66,7 @@ class PushService {
       debugPrint('[FCM] Permiso de notificaciones: ${settings.authorizationStatus}');
 
       _token = await FirebaseMessaging.instance.getToken();
-      debugPrint('[FCM] Token del dispositivo: ${_token ?? "NO OBTENIDO"}');
+      debugPrint('[FCM] Token del dispositivo: ${_token != null ? "OBTENIDO" : "NO OBTENIDO"}');
 
       // Registra el token contra el backend para recibir push aunque la app
       // este cerrada. Si todavia no hay sesion, se reintentara al iniciar sesion.
@@ -76,11 +76,11 @@ class PushService {
       // rota, hay que volver a registrarlo.
       FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
         _token = newToken;
-        debugPrint('[FCM] Token renovado: $newToken');
+        debugPrint('[FCM] Token renovado');
         ApiService.registerPushToken(newToken, platform: 'android').then((_) {
           debugPrint('[FCM] Token renovado registrado en el backend');
         }).catchError((Object e) {
-          debugPrint('[FCM] No se pudo registrar el token renovado: $e');
+          debugPrint('[FCM] No se pudo registrar el token renovado');
         });
       });
 

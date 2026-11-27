@@ -90,6 +90,30 @@ export class StorageService implements OnModuleInit {
     return data.publicUrl;
   }
 
+  /**
+   * Genera una URL pre-firmada con caducidad (Práctica 3 / 10 / 11).
+   *
+   * Por omisión se firma: un adjunto nunca debe quedar accesible de forma
+   * permanente. Solo se degrada a URL pública si `SUPABASE_SIGNED_URLS=false`
+   * (por ejemplo, un bucket público heredado) o si la firma falla, y en ese
+   * caso queda registrado en el log para no ocultar la configuración.
+   */
+  async getAttachmentUrl(path: string, expiresInSeconds = 3600): Promise<string> {
+    const useSigned = this.configService.get<string>('SUPABASE_SIGNED_URLS') !== 'false';
+    if (!useSigned) return this.getFileUrl(path);
+
+    const { data, error } = await this.supabase.storage
+      .from(this.bucketName)
+      .createSignedUrl(path, expiresInSeconds);
+
+    if (error || !data?.signedUrl) {
+      this.logger.warn(`No se pudo firmar URL para ${path}: ${error?.message ?? 'sin dato'}`);
+      return this.getFileUrl(path);
+    }
+
+    return data.signedUrl;
+  }
+
   async health() {
     const base = { bucket: this.bucketName, keyMode: this.keyMode };
     try {

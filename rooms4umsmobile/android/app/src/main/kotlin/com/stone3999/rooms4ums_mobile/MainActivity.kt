@@ -35,6 +35,11 @@ class MainActivity : FlutterActivity() {
                         result,
                     )
                     "test" -> test(result)
+                    "chat" -> chat(
+                        call.argument<String>("sender"),
+                        call.argument<String>("message"),
+                        result,
+                    )
                     "telemetry" -> telemetry(result)
                     else -> result.notImplemented()
                 }
@@ -143,6 +148,40 @@ class MainActivity : FlutterActivity() {
             }
     }
 
+    /** Envía un mensaje breve directo al reloj por Data Layer (Práctica 6). */
+    private fun chat(sender: String?, message: String?, result: MethodChannel.Result) {
+        val clean = message?.trim().orEmpty()
+        if (clean.isEmpty()) {
+            result.success(mapOf("ok" to false, "error" to "MENSAJE VACÍO"))
+            return
+        }
+
+        Wearable.getNodeClient(this).connectedNodes
+            .addOnSuccessListener { nodes ->
+                val node = nodes.firstOrNull()
+                if (node == null) {
+                    result.success(mapOf("ok" to false, "error" to "NO HAY RELOJ CONECTADO"))
+                    return@addOnSuccessListener
+                }
+
+                val payload = JSONObject()
+                    .put("sender", sender ?: "Smartphone")
+                    .put("message", clean)
+                    .toString()
+                    .toByteArray(Charsets.UTF_8)
+
+                Wearable.getMessageClient(this)
+                    .sendMessage(node.id, PATH_CHAT, payload)
+                    .addOnSuccessListener { result.success(mapOf("ok" to true)) }
+                    .addOnFailureListener { e ->
+                        result.success(mapOf("ok" to false, "error" to e.message))
+                    }
+            }
+            .addOnFailureListener { e ->
+                result.success(mapOf("ok" to false, "error" to e.message))
+            }
+    }
+
     /** Última muestra de telemetría que publicó el reloj (Práctica 1 + 2). */
     private fun telemetry(result: MethodChannel.Result) {
         val uri = Uri.parse("wear://*/$PATH_TELEMETRY")
@@ -177,6 +216,7 @@ class MainActivity : FlutterActivity() {
 
         private const val PATH_LINK = "/rooms4ums/link"
         private const val PATH_POST_CREATED = "/rooms4ums/post-created"
+        private const val PATH_CHAT = "/rooms4ums/chat"
         private const val PATH_TELEMETRY = "/rooms4ums/telemetry"
 
         private const val KEY_MAGNITUDE = "mag"

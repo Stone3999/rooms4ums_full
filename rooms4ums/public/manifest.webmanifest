@@ -1,0 +1,48 @@
+{
+  "name": "ROOMS4UMS — Foros retro en tiempo real",
+  "short_name": "ROOMS4UMS",
+  "description": "Foros temáticos con estética de terminal retro: salas, publicaciones, comentarios y notificaciones en tiempo real.",
+  "id": "/",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#FF8C00",
+  "background_color": "#000000",
+  "lang": "es-MX",
+  "categories": ["social", "news", "education"],
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Salas",
+      "short_name": "Salas",
+      "url": "/home",
+      "description": "Entrar a las salas temáticas"
+    },
+    {
+      "name": "Populares",
+      "short_name": "Populares",
+      "url": "/popular",
+      "description": "Ver las publicaciones más leídas"
+    }
+  ]
+}

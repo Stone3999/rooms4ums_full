@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 
 import 'package:rooms4ums_mobile/core/services/api_service.dart';
@@ -18,11 +20,30 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   /// Falso mientras la base local aún no pudo leerse (p. ej. sin permisos).
   bool _cacheAvailable = true;
+  String? _currentUid;
+  String? _currentUsername;
 
   @override
   void initState() {
     super.initState();
+    _loadIdentity();
     _loadRooms();
+  }
+
+  Future<void> _loadIdentity() async {
+    final token = await ApiService.getToken();
+    if (token == null || token.isEmpty) return;
+    final parts = token.split('.');
+    if (parts.length < 2) return;
+    try {
+      final normalized = base64Url.normalize(parts[1]);
+      final payload = jsonDecode(utf8.decode(base64Url.decode(normalized))) as Map<String, dynamic>;
+      if (!mounted) return;
+      setState(() {
+        _currentUid = payload['sub']?.toString();
+        _currentUsername = payload['username']?.toString();
+      });
+    } catch (_) {}
   }
 
   /// PRÁCTICA 4: primero red, y si falla se sirve la caché local.
@@ -156,6 +177,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
               ),
             ),
+            if (_currentUid != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+                child: Text(
+                  'USUARIO: ${_currentUsername ?? 'ACTIVO'} · UID: $_currentUid',
+                  style: const TextStyle(color: AppColors.accent, fontSize: 9, letterSpacing: 0.8),
+                ),
+              ),
             if (!_cacheAvailable)
               const Padding(
                 padding: EdgeInsets.fromLTRB(16, 8, 16, 0),

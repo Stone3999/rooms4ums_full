@@ -21,6 +21,10 @@ let Post = class Post {
     viewCount;
     commentCount;
     tags;
+    status;
+    priority;
+    assignedAgentId;
+    idempotencyKey;
 };
 exports.Post = Post;
 __decorate([
@@ -44,7 +48,7 @@ __decorate([
     __metadata("design:type", String)
 ], Post.prototype, "roomId", void 0);
 __decorate([
-    (0, mongoose_1.Prop)({ type: [{ url: String, type: String, name: String }] }),
+    (0, mongoose_1.Prop)({ type: [{ url: String, path: String, type: String, name: String }] }),
     __metadata("design:type", Array)
 ], Post.prototype, "attachments", void 0);
 __decorate([
@@ -59,10 +63,27 @@ __decorate([
     (0, mongoose_1.Prop)({ type: [String], default: [] }),
     __metadata("design:type", Array)
 ], Post.prototype, "tags", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ default: 'PENDIENTE', enum: ['PENDIENTE', 'EN_PROCESO', 'RESUELTO'] }),
+    __metadata("design:type", String)
+], Post.prototype, "status", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ default: 'MEDIA', enum: ['BAJA', 'MEDIA', 'ALTA', 'CRITICA'] }),
+    __metadata("design:type", String)
+], Post.prototype, "priority", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ required: false }),
+    __metadata("design:type", String)
+], Post.prototype, "assignedAgentId", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ required: false }),
+    __metadata("design:type", String)
+], Post.prototype, "idempotencyKey", void 0);
 exports.Post = Post = __decorate([
     (0, mongoose_1.Schema)({ timestamps: true })
 ], Post);
 exports.PostSchema = mongoose_1.SchemaFactory.createForClass(Post);
 exports.PostSchema.index({ roomId: 1, createdAt: -1 });
 exports.PostSchema.index({ title: 'text', content: 'text' });
+exports.PostSchema.index({ idempotencyKey: 1 }, { unique: true, sparse: true });
 //# sourceMappingURL=post.schema.js.map
