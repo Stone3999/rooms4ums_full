@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Paleta y estilos compartidos taken del CSS de la web (rooms4ums/src/styles).
 class AppColors {
