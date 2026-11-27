@@ -175,6 +175,20 @@ limpieza; la prueba con reloj emparejado queda pendiente de evidencia.
 
 Estado: IMPLEMENTADO; EVIDENCIA FISICA PENDIENTE.
 
+Extension móvil de chat de voz: la app Flutter comparte los canales del
+gateway Socket.IO con la web, solicita acceso al micrófono, establece audio
+WebRTC entre participantes, permite silenciarse y mantiene el chat de texto.
+En Android también solicita captura del sistema y retransmite la pantalla a
+los participantes; en iOS el audio está disponible, pero compartir pantalla
+requiere agregar una extensión Broadcast Upload al proyecto iOS.
+
+Archivos adicionales:
+  rooms4umsmobile/lib/core/services/voice_service.dart
+  rooms4umsmobile/lib/ui/screens/voice_screen.dart
+  rooms4umsmobile/lib/ui/navigation/main_shell.dart
+  rooms4umsmobile/android/app/src/main/AndroidManifest.xml
+  backendrooms4ums/src/voice/voice.gateway.ts
+
 
 ===============================================================================
 PRACTICA 7 - ROLES, ATENCION DE CASOS Y ADJUNTOS
@@ -194,8 +208,16 @@ Archivos principales:
   backendrooms4ums/src/forum/forum.controller.ts
   backendrooms4ums/src/forum/posts.service.ts
   backendrooms4ums/src/forum/dto/forum.dto.ts
+  backendrooms4ums/src/storage/storage.service.ts
+  rooms4ums/src/app/core/services/forum.service.ts
+  rooms4ums/src/app/pages/forum-feed/post-create.component.ts
   rooms4umsmobile/lib/core/services/api_service.dart
   rooms4umsmobile/lib/ui/screens/room_screen.dart
+
+La publicación web usa una clave de idempotencia para evitar duplicados en
+reintentos concurrentes. Si la persistencia del post falla después de subir
+adjuntos, el backend intenta retirarlos de Storage y registra explícitamente
+cualquier fallo de limpieza.
 
 Estado: FUNCIONALIDAD IMPLEMENTADA y hay pruebas de contrato multipart y
 validaciones. La demostracion integral con cuatro cuentas/roles y reasignacion

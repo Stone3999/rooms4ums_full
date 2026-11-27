@@ -43,6 +43,27 @@ describe('PostsService (Prácticas 9, 10, 12 y 13)', () => {
     expect(mockModel).not.toHaveBeenCalled();
   });
 
+  it('resuelve reintentos simultáneos de la misma clave tras una colisión única', async () => {
+    const existingPost = { _id: validId, title: 'Post persistido', idempotencyKey: 'idem-race' };
+    mockModel.findOne
+      .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue(null) })
+      .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue(existingPost) });
+    mockModel.mockImplementationOnce(() => ({
+      save: jest.fn().mockRejectedValue({ code: 11000 }),
+    }));
+
+    await expect(
+      service.create({
+        title: 'Post persistido',
+        content: 'Body',
+        roomId: 'general',
+        authorId: 'u1',
+        idempotencyKey: 'idem-race',
+      }),
+    ).resolves.toBe(existingPost);
+    expect(mockPushService.notifyNewPost).not.toHaveBeenCalled();
+  });
+
   it('rechaza actualización ajena con ForbiddenException 403 (Práctica 10 SEG-06)', async () => {
     mockModel.findById.mockReturnValue({
       exec: jest.fn().mockResolvedValue({

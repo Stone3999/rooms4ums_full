@@ -53,19 +53,29 @@ export class PostsService {
    */
   async create(createPostDto: any): Promise<PostDocument> {
     if (createPostDto.idempotencyKey) {
-      const existing = await this.postModel
-        .findOne({ idempotencyKey: createPostDto.idempotencyKey })
-        .exec();
+      const existing = await this.findByIdempotencyKey(createPostDto.idempotencyKey);
       if (existing) return existing;
     }
 
-    const createdPost = await new this.postModel(createPostDto).save();
+    let createdPost: PostDocument;
+    try {
+      createdPost = await new this.postModel(createPostDto).save();
+    } catch (error: any) {
+      if (error?.code !== 11000 || !createPostDto.idempotencyKey) throw error;
+      const existing = await this.findByIdempotencyKey(createPostDto.idempotencyKey);
+      if (!existing) throw error;
+      return existing;
+    }
 
     this.pushService
       .notifyNewPost(createdPost, createdPost.authorId)
       .catch((err) => this.logger.error(`Fallo el push del post: ${err?.message ?? err}`));
 
     return createdPost;
+  }
+
+  async findByIdempotencyKey(key: string): Promise<PostDocument | null> {
+    return this.postModel.findOne({ idempotencyKey: key }).exec();
   }
 
   async findAllByRoom(roomId: string, page = 1, limit = 20): Promise<{ data: any[]; total: number }> {

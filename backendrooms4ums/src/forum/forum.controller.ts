@@ -4,6 +4,7 @@ import {
   UseGuards, UseInterceptors, UploadedFiles, Request, InternalServerErrorException,
   BadRequestException, ForbiddenException, Logger, HttpCode, HttpStatus,
 } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { AuthGuard } from '@nestjs/passport';
 import { PostsService } from './posts.service';
@@ -79,6 +80,10 @@ export class ForumController {
     const { title, content, roomId, tags, status, priority } = body;
     const attachments: { url: string; path?: string; type: string; name: string }[] = [];
     let uploadError: string | null = null;
+    const requestKey = idempotencyKey?.trim() || randomUUID();
+
+    const existing = await this.postsService.findByIdempotencyKey(requestKey);
+    if (existing) return existing;
 
     if (files && files.length > 0) {
       for (const file of files) {
@@ -119,10 +124,17 @@ export class ForumController {
         tags: tags ? (Array.isArray(tags) ? tags : [tags]) : [],
         status: status || 'PENDIENTE',
         priority: priority || 'MEDIA',
-        idempotencyKey: idempotencyKey?.trim() || undefined,
+        idempotencyKey: requestKey,
       });
     } catch (dbError: any) {
-      this.logger.error(`Error en BD al crear post: ${dbError.message}`);
+      this.logger.error(`Error en BD al crear post: ${dbError.message}`, dbError.stack);
+      try {
+        await this.storageService.deleteFiles(
+          attachments.map((attachment) => attachment.path).filter((path): path is string => !!path),
+        );
+      } catch (cleanupError: any) {
+        this.logger.error(`No se pudieron limpiar adjuntos tras fallar la BD: ${cleanupError.message}`);
+      }
       throw new InternalServerErrorException('Error al guardar el post en la base de datos');
     }
   }

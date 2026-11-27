@@ -68,6 +68,15 @@ export class StorageService implements OnModuleInit {
     return data;
   }
 
+  async deleteFiles(paths: string[]): Promise<void> {
+    if (paths.length === 0) return;
+
+    const { error } = await this.supabase.storage.from(this.bucketName).remove(paths);
+    if (error) {
+      throw new Error(`No se pudieron eliminar adjuntos de Supabase Storage: ${error.message}`);
+    }
+  }
+
   private explain(message: string): string {
     const lower = message.toLowerCase();
     if (lower.includes('bucket not found')) {

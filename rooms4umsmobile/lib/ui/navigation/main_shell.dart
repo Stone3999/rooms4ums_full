@@ -4,6 +4,7 @@ import 'package:rooms4ums_mobile/core/theme/app_colors.dart';
 import 'package:rooms4ums_mobile/ui/screens/home_screen.dart';
 import 'package:rooms4ums_mobile/ui/screens/popular_screen.dart';
 import 'package:rooms4ums_mobile/ui/screens/wearable_screen.dart';
+import 'package:rooms4ums_mobile/ui/screens/voice_screen.dart';
 
 /// Contenedor principal con barra de navegación inferior.
 /// Mantiene viva cada pestaña con IndexedStack para no recargar al cambiar.
@@ -16,17 +17,25 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int _index = 0;
+  bool _voiceTabOpened = false;
 
   static const List<Widget> _tabs = <Widget>[
     HomeScreen(),
     PopularScreen(),
     WearableScreen(),
+    VoiceScreen(),
   ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(index: _index, children: _tabs),
+      body: IndexedStack(
+        index: _index,
+        children: [
+          ..._tabs,
+          _voiceTabOpened ? const VoiceScreen() : const SizedBox.shrink(),
+        ],
+      ),
       bottomNavigationBar: _buildBar(),
     );
   }
@@ -46,6 +55,7 @@ class _MainShellState extends State<MainShell> {
               _item(0, Icons.door_front_door_outlined, 'SALAS'),
               _item(1, Icons.local_fire_department, 'POPULARES'),
               _item(2, Icons.watch, 'RELOJ'),
+              _item(3, Icons.headset_mic, 'VOZ'),
             ],
           ),
         ),
@@ -59,7 +69,10 @@ class _MainShellState extends State<MainShell> {
 
     return Expanded(
       child: InkWell(
-        onTap: () => setState(() => _index = index),
+        onTap: () => setState(() {
+          _index = index;
+          if (index == 3) _voiceTabOpened = true;
+        }),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [

@@ -18,12 +18,12 @@ import { LanguageService } from '../../core/services/language.service';
       <div class="form-content">
         <div class="field">
           <label>{{ langService.translate('TITLE') }}</label>
-          <input type="text" [(ngModel)]="postData.title" class="win-input" placeholder="Título del post...">
+          <input type="text" [(ngModel)]="postData.title" (ngModelChange)="resetSubmissionKey()" class="win-input" placeholder="Título del post...">
         </div>
 
         <div class="field">
           <label>{{ langService.translate('CONTENT') }}</label>
-          <textarea [(ngModel)]="postData.content" class="win-input" rows="6" placeholder="¿Qué estás pensando?"></textarea>
+          <textarea [(ngModel)]="postData.content" (ngModelChange)="resetSubmissionKey()" class="win-input" rows="6" placeholder="¿Qué estás pensando?"></textarea>
         </div>
 
         <div class="field">
@@ -98,6 +98,7 @@ export class PostCreateComponent {
   selectedFiles: File[] = [];
   isSubmitting = signal(false);
   errorMessage = signal<string | null>(null);
+  private submissionKey = this.newSubmissionKey();
 
   private static readonly MAX_FILE_SIZE = 8 * 1024 * 1024;
 
@@ -119,12 +120,24 @@ export class PostCreateComponent {
       this.selectedFiles.push(file);
     }
 
+    this.resetSubmissionKey();
     event.target.value = '';
   }
 
   removeFile(index: number) {
     this.selectedFiles.splice(index, 1);
+    this.resetSubmissionKey();
     this.errorMessage.set(null);
+  }
+
+  resetSubmissionKey() {
+    this.submissionKey = this.newSubmissionKey();
+  }
+
+  private newSubmissionKey(): string {
+    const uniqueId = globalThis.crypto?.randomUUID?.()
+      ?? `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    return `web_${uniqueId}`;
   }
 
   private describeError(error: any): string {
@@ -151,8 +164,9 @@ export class PostCreateComponent {
     });
 
     try {
-      const result = await this.forumService.createPost(formData);
+      const result = await this.forumService.createPost(formData, this.submissionKey);
       this.onCreated.emit(result);
+      this.resetSubmissionKey();
       this.isSubmitting.set(false);
     } catch (error) {
       console.error('Error creating post:', error);

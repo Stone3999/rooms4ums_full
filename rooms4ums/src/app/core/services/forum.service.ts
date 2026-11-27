@@ -62,9 +62,9 @@ export class ForumService {
     return firstValueFrom(this.http.get<Post>(`${this.apiUrl}/posts/${id}`));
   }
 
-  async createPost(formData: FormData): Promise<Post> {
+  async createPost(formData: FormData, idempotencyKey: string): Promise<Post> {
     return firstValueFrom(this.http.post<Post>(`${this.apiUrl}/posts`, formData, { 
-      headers: this.getHeaders() 
+      headers: this.getHeaders().set('X-Idempotency-Key', idempotencyKey)
     }));
   }
 
