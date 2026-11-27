@@ -6,6 +6,8 @@ import 'package:flutter_background/flutter_background.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 
+import 'package:rooms4ums_mobile/core/services/wear_service.dart';
+
 class VoiceParticipant {
   final String id;
   final String username;
@@ -54,6 +56,7 @@ class VoiceService extends ChangeNotifier {
   io.Socket? _socket;
   Completer<void>? _connectCompleter;
   final Map<String, RTCPeerConnection> _peerConnections = {};
+  final Map<String, MediaStream> _remoteStreams = {};
   final Map<String, List<RTCIceCandidate>> _pendingCandidates = {};
   final List<Map<String, dynamic>> channels = [];
   final List<VoiceParticipant> participants = [];
@@ -69,6 +72,82 @@ class VoiceService extends ChangeNotifier {
   bool microphoneUnavailable = false;
   bool _backgroundExecutionEnabled = false;
   bool _isStoppingScreenShare = false;
+  Timer? _wearCallBridgeTimer;
+  bool _readingWearCallActions = false;
+  bool _wearCallErrorLogged = false;
+  int _wearCallStatusTicks = 0;
+  String _activeWearCallId = '';
+  String _callUsername = '';
+
+  void _startWearCallBridge(String username) {
+    if (defaultTargetPlatform != TargetPlatform.android) return;
+    _wearCallBridgeTimer?.cancel();
+    _activeWearCallId = DateTime.now().microsecondsSinceEpoch.toString();
+    _callUsername = username;
+    _wearCallErrorLogged = false;
+    _wearCallStatusTicks = 0;
+    unawaited(_publishWearCallStatus());
+    _wearCallBridgeTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (activeRoomId == null) return;
+      _wearCallStatusTicks++;
+      if (_wearCallStatusTicks.isEven) unawaited(_publishWearCallStatus());
+      unawaited(_processWearCallActions());
+    });
+  }
+
+  Future<void> _publishWearCallStatus() async {
+    final roomId = activeRoomId;
+    final channel = channels.cast<Map<String, dynamic>?>().firstWhere(
+      (item) => item?['id'] == roomId,
+      orElse: () => null,
+    );
+    try {
+      final result = await WearService.sendCallStatus(
+        active: roomId != null,
+        muted: isMuted,
+        callId: _activeWearCallId,
+        room: (channel?['topic'] ?? 'Canal de voz').toString(),
+        username: _callUsername,
+      );
+      if (result.ok) {
+        _wearCallErrorLogged = false;
+      } else if (!_wearCallErrorLogged) {
+        debugPrint('[WEAR] No se pudo actualizar el estado de llamada: ${result.message}');
+        _wearCallErrorLogged = true;
+      }
+    } catch (error, stackTrace) {
+      debugPrint('[WEAR] Error al actualizar el estado de llamada: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    }
+  }
+
+  Future<void> _processWearCallActions() async {
+    if (_readingWearCallActions || activeRoomId == null) return;
+    _readingWearCallActions = true;
+    try {
+      final actions = await WearService.takeCallActions();
+      for (final action in actions) {
+        if (activeRoomId == null) break;
+        if (action.callId != _activeWearCallId) continue;
+
+        switch (action.action) {
+          case WearService.actionToggleMute:
+            await toggleMute();
+            break;
+          case WearService.actionHangUp:
+            await leaveRoom();
+            return;
+          default:
+            debugPrint('[WEAR] Acción de llamada desconocida: ${action.action}');
+        }
+      }
+    } catch (error, stackTrace) {
+      debugPrint('[WEAR] Error al procesar controles del reloj: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    } finally {
+      _readingWearCallActions = false;
+    }
+  }
 
   Future<void> _ensureConnected() async {
     if (_socket?.connected == true) {
@@ -113,7 +192,9 @@ class VoiceService extends ChangeNotifier {
     socket.onConnectError((_) {
       isConnected = false;
       if (_connectCompleter != null && !_connectCompleter!.isCompleted) {
-        _connectCompleter!.completeError(StateError('No se pudo conectar al servicio de voz.'));
+        _connectCompleter!.completeError(
+          StateError('No se pudo conectar al servicio de voz.'),
+        );
       }
       error = 'No se pudo conectar al servicio de voz.';
       notifyListeners();
@@ -142,9 +223,19 @@ class VoiceService extends ChangeNotifier {
     });
     socket.on('user-video-toggled', (dynamic data) {
       if (data is Map) {
-        _updateParticipant(data['id']?.toString() ?? '', (user) {
-          return user.copyWith(isSharingScreen: data['isSharing'] == true);
-        });
+        final id = data['id']?.toString() ?? '';
+        final isSharing = data['isSharing'] == true;
+        if (isSharing) {
+          _updateParticipant(
+            id,
+            (user) => user.copyWith(isSharingScreen: true),
+          );
+        } else {
+          _removeRemoteVideoTracks(id).catchError((Object cause) {
+            error = 'No se pudo actualizar la pantalla compartida.';
+            notifyListeners();
+          });
+        }
       }
     });
     socket.on('new-voice-message', (dynamic data) {
@@ -161,7 +252,10 @@ class VoiceService extends ChangeNotifier {
         final id = data['id']?.toString();
         final index = channels.indexWhere((channel) => channel['id'] == id);
         if (index >= 0) {
-          channels[index] = {...channels[index], 'userCount': data['userCount']};
+          channels[index] = {
+            ...channels[index],
+            'userCount': data['userCount'],
+          };
           notifyListeners();
         }
       }
@@ -192,13 +286,20 @@ class VoiceService extends ChangeNotifier {
 
   Future<void> loadChannels() async {
     await _ensureConnected();
-    final response = await _emitWithAck('get-voice-channels', <String, dynamic>{});
+    final response = await _emitWithAck(
+      'get-voice-channels',
+      <String, dynamic>{},
+    );
     if (response is! List) {
       throw StateError('El servidor devolvió una lista de canales inválida.');
     }
     channels
       ..clear()
-      ..addAll(response.whereType<Map>().map((channel) => Map<String, dynamic>.from(channel)));
+      ..addAll(
+        response.whereType<Map>().map(
+          (channel) => Map<String, dynamic>.from(channel),
+        ),
+      );
     notifyListeners();
   }
 
@@ -268,6 +369,7 @@ class VoiceService extends ChangeNotifier {
           await _callParticipant(id);
         }
       }
+      _startWearCallBridge(username);
       notifyListeners();
     } catch (cause) {
       _socket?.emit('leave-room');
@@ -278,7 +380,10 @@ class VoiceService extends ChangeNotifier {
       }
       _peerConnections.clear();
       _pendingCandidates.clear();
+      await _disposeRemoteStreams();
       await _disposeLocalMedia();
+      participants.clear();
+      messages.clear();
       microphoneUnavailable = false;
       error = cause is StateError
           ? cause.message.toString()
@@ -337,18 +442,91 @@ class VoiceService extends ChangeNotifier {
       });
     };
     peer.onTrack = (event) {
-      if (event.streams.isNotEmpty) {
-        _setParticipantStream(id, event.streams.first);
-      }
-    };
-    peer.onRemoveStream = (_) {
-      _updateParticipant(id, (user) => user.copyWith(clearStream: true, isSharingScreen: false));
+      _attachRemoteTrack(id, event.track).catchError((Object cause) {
+        error = 'No se pudo mostrar el audio o la pantalla compartida.';
+        notifyListeners();
+      });
     };
     return peer;
   }
 
+  Future<void> _attachRemoteTrack(String id, MediaStreamTrack track) async {
+    if (!_peerConnections.containsKey(id)) return;
+    if (!participants.any((participant) => participant.id == id)) {
+      _upsertParticipant(id, 'Participante');
+    }
+
+    var stream = _remoteStreams[id];
+    if (stream == null) {
+      stream = await createLocalMediaStream('remote-$id');
+      _remoteStreams[id] = stream;
+    }
+
+    if (!stream.getTracks().any((existing) => existing.id == track.id)) {
+      await stream.addTrack(track);
+    }
+    track.onEnded = () => unawaited(_removeRemoteTrack(id, track));
+
+    _updateParticipant(id, (participant) {
+      return participant.copyWith(
+        stream: stream,
+        isSharingScreen: stream!.getVideoTracks().isNotEmpty,
+      );
+    });
+  }
+
+  Future<void> _removeRemoteVideoTracks(String id) async {
+    final stream = _remoteStreams[id];
+    if (stream == null) {
+      _updateParticipant(
+        id,
+        (participant) => participant.copyWith(isSharingScreen: false),
+      );
+      return;
+    }
+
+    for (final track in List<MediaStreamTrack>.from(stream.getVideoTracks())) {
+      await stream.removeTrack(track);
+    }
+    _updateParticipant(id, (participant) {
+      return participant.copyWith(
+        stream: stream,
+        isSharingScreen: stream.getVideoTracks().isNotEmpty,
+      );
+    });
+  }
+
+  Future<void> _removeRemoteTrack(String id, MediaStreamTrack track) async {
+    final stream = _remoteStreams[id];
+    if (stream == null ||
+        !stream.getTracks().any((item) => item.id == track.id)) {
+      return;
+    }
+
+    await stream.removeTrack(track);
+    if (stream.getTracks().isEmpty) {
+      _remoteStreams.remove(id);
+      await stream.dispose();
+      _updateParticipant(
+        id,
+        (participant) =>
+            participant.copyWith(clearStream: true, isSharingScreen: false),
+      );
+      return;
+    }
+
+    _updateParticipant(id, (participant) {
+      return participant.copyWith(
+        stream: stream,
+        isSharingScreen: stream.getVideoTracks().isNotEmpty,
+      );
+    });
+  }
+
   Future<void> _negotiate(String id, RTCPeerConnection peer) async {
-    if (peer.signalingState != RTCSignalingState.RTCSignalingStateStable) return;
+    if (peer.signalingState != RTCSignalingState.RTCSignalingStateStable) {
+      return;
+    }
     final offer = await peer.createOffer();
     await peer.setLocalDescription(offer);
     _socket?.emit('signal', {
@@ -454,6 +632,7 @@ class VoiceService extends ChangeNotifier {
         _socket?.emit('toggle-mute', {'roomId': roomId, 'isMuted': false});
         error = null;
         notifyListeners();
+        unawaited(_publishWearCallStatus());
         return;
       } on PlatformException {
         microphoneUnavailable = true;
@@ -464,11 +643,13 @@ class VoiceService extends ChangeNotifier {
     }
 
     isMuted = !isMuted;
-    for (final track in localAudioStream?.getAudioTracks() ?? <MediaStreamTrack>[]) {
+    for (final track
+        in localAudioStream?.getAudioTracks() ?? <MediaStreamTrack>[]) {
       track.enabled = !isMuted;
     }
     _socket?.emit('toggle-mute', {'roomId': roomId, 'isMuted': isMuted});
     notifyListeners();
+    unawaited(_publishWearCallStatus());
   }
 
   Future<void> toggleScreenShare() async {
@@ -512,7 +693,9 @@ class VoiceService extends ChangeNotifier {
       isSharingScreen = false;
       for (final peer in _peerConnections.values) {
         final senders = await peer.getSenders();
-        for (final sender in senders.where((sender) => sender.track?.kind == 'video')) {
+        for (final sender in senders.where(
+          (sender) => sender.track?.kind == 'video',
+        )) {
           await peer.removeTrack(sender);
         }
       }
@@ -526,7 +709,8 @@ class VoiceService extends ChangeNotifier {
       } else if (cause is StateError) {
         error = cause.message.toString();
       } else {
-        error = 'No se pudo compartir la pantalla. Revisa el permiso del sistema.';
+        error =
+            'No se pudo compartir la pantalla. Revisa el permiso del sistema.';
       }
       notifyListeners();
       rethrow;
@@ -534,7 +718,10 @@ class VoiceService extends ChangeNotifier {
   }
 
   Future<void> _enableAndroidScreenCapture() async {
-    if (defaultTargetPlatform != TargetPlatform.android || _backgroundExecutionEnabled) return;
+    if (defaultTargetPlatform != TargetPlatform.android ||
+        _backgroundExecutionEnabled) {
+      return;
+    }
 
     const config = FlutterBackgroundAndroidConfig(
       notificationTitle: 'Rooms4ums comparte tu pantalla',
@@ -543,11 +730,15 @@ class VoiceService extends ChangeNotifier {
       notificationIcon: AndroidResource(name: 'ic_launcher', defType: 'mipmap'),
     );
     if (!await FlutterBackground.initialize(androidConfig: config)) {
-      throw StateError('Se requieren permisos de notificación para compartir la pantalla.');
+      throw StateError(
+        'Se requieren permisos de notificación para compartir la pantalla.',
+      );
     }
     if (!await FlutterBackground.enableBackgroundExecution()) {
       await FlutterBackground.disableBackgroundExecution();
-      throw StateError('Android no pudo iniciar el servicio de captura de pantalla.');
+      throw StateError(
+        'Android no pudo iniciar el servicio de captura de pantalla.',
+      );
     }
     _backgroundExecutionEnabled = true;
   }
@@ -557,7 +748,9 @@ class VoiceService extends ChangeNotifier {
     final disabled = await FlutterBackground.disableBackgroundExecution();
     _backgroundExecutionEnabled = false;
     if (!disabled) {
-      throw StateError('Android no pudo detener el servicio de captura de pantalla.');
+      throw StateError(
+        'Android no pudo detener el servicio de captura de pantalla.',
+      );
     }
   }
 
@@ -570,7 +763,9 @@ class VoiceService extends ChangeNotifier {
       isSharingScreen = false;
       for (final peer in _peerConnections.values) {
         final senders = await peer.getSenders();
-        for (final sender in senders.where((sender) => sender.track?.kind == 'video')) {
+        for (final sender in senders.where(
+          (sender) => sender.track?.kind == 'video',
+        )) {
           await peer.removeTrack(sender);
         }
       }
@@ -601,6 +796,8 @@ class VoiceService extends ChangeNotifier {
 
   Future<void> leaveRoom() async {
     final roomId = activeRoomId;
+    _wearCallBridgeTimer?.cancel();
+    _wearCallBridgeTimer = null;
     if (roomId != null) _socket?.emit('leave-room');
     activeRoomId = null;
     if (isSharingScreen && roomId != null) {
@@ -612,6 +809,7 @@ class VoiceService extends ChangeNotifier {
     }
     _peerConnections.clear();
     _pendingCandidates.clear();
+    await _disposeRemoteStreams();
     await _disposeLocalMedia();
     participants.clear();
     messages.clear();
@@ -619,6 +817,11 @@ class VoiceService extends ChangeNotifier {
     microphoneUnavailable = false;
     await _disableAndroidScreenCapture();
     notifyListeners();
+    if (roomId != null) {
+      await _publishWearCallStatus();
+      _activeWearCallId = '';
+      _callUsername = '';
+    }
   }
 
   Future<void> _disposeLocalMedia() async {
@@ -638,7 +841,9 @@ class VoiceService extends ChangeNotifier {
 
   void _upsertParticipant(String id, String username) {
     if (id.isEmpty) return;
-    final index = participants.indexWhere((participant) => participant.id == id);
+    final index = participants.indexWhere(
+      (participant) => participant.id == id,
+    );
     if (index == -1) {
       participants.add(VoiceParticipant(id: id, username: username));
     } else {
@@ -647,22 +852,13 @@ class VoiceService extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _setParticipantStream(String id, MediaStream stream) {
-    final index = participants.indexWhere((participant) => participant.id == id);
-    if (index == -1) return;
-    final hasVideo = stream.getVideoTracks().isNotEmpty;
-    participants[index] = participants[index].copyWith(
-      stream: stream,
-      isSharingScreen: hasVideo,
-    );
-    notifyListeners();
-  }
-
   void _updateParticipant(
     String id,
     VoiceParticipant Function(VoiceParticipant participant) update,
   ) {
-    final index = participants.indexWhere((participant) => participant.id == id);
+    final index = participants.indexWhere(
+      (participant) => participant.id == id,
+    );
     if (index < 0) return;
     participants[index] = update(participants[index]);
     notifyListeners();
@@ -673,9 +869,19 @@ class VoiceService extends ChangeNotifier {
     if (peer != null) {
       unawaited(_disposePeer(peer));
     }
+    final stream = _remoteStreams.remove(id);
+    if (stream != null) unawaited(stream.dispose());
     _pendingCandidates.remove(id);
     participants.removeWhere((participant) => participant.id == id);
     notifyListeners();
+  }
+
+  Future<void> _disposeRemoteStreams() async {
+    final streams = _remoteStreams.values.toList();
+    _remoteStreams.clear();
+    for (final stream in streams) {
+      await stream.dispose();
+    }
   }
 
   Future<void> _disposePeer(RTCPeerConnection peer) async {

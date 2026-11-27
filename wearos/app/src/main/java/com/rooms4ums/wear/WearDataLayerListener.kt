@@ -1,6 +1,11 @@
 package com.rooms4ums.wear
 
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Context
+import android.content.Intent
 import android.util.Log
+import androidx.core.app.NotificationCompat
 import com.google.android.gms.wearable.DataEvent
 import com.google.android.gms.wearable.DataEventBuffer
 import com.google.android.gms.wearable.DataMapItem
@@ -71,18 +76,40 @@ class WearDataLayerListener : WearableListenerService() {
                 Notify.show(this, "${room.uppercase()}: $title")
             }
 
-            PATH_CHAT -> {
+            WearCallDataLayer.PATH_CALL_STATUS -> {
                 val raw = messageEvent.data.toString(Charsets.UTF_8)
                 val json = runCatching { JSONObject(raw) }.getOrNull()
-                val sender = json?.optString("sender")?.ifEmpty { "Smartphone" } ?: "Smartphone"
-                val message = json?.optString("message").orEmpty()
-                if (message.isNotEmpty()) {
-                    val id = json?.optString("id")?.ifEmpty { messageEvent.requestId.toString() }
-                        ?: messageEvent.requestId.toString()
-                    WearChatStore.append(this, id, sender, message)
-                    Log.i(TAG, "Mensaje recibido de $sender")
-                    Notify.show(this, "$sender: $message")
+                if (json == null) {
+                    Log.e(TAG, "Estado de llamada inválido")
+                    return
                 }
+
+                val active = json.optBoolean("active")
+                val muted = json.optBoolean("muted")
+                val callId = json.optString("callId")
+                val room = json.optString("room")
+                val username = json.optString("username")
+                val preferences = getSharedPreferences(
+                    WearCallDataLayer.CALL_PREFERENCES,
+                    Context.MODE_PRIVATE,
+                )
+                val changed = preferences.getBoolean(WearCallDataLayer.KEY_CALL_ACTIVE, false) != active ||
+                    preferences.getBoolean(WearCallDataLayer.KEY_CALL_MUTED, false) != muted ||
+                    preferences.getString(WearCallDataLayer.KEY_CALL_ID, "") != callId
+                preferences.edit()
+                    .putBoolean(WearCallDataLayer.KEY_CALL_ACTIVE, json.optBoolean("active"))
+                    .putBoolean(WearCallDataLayer.KEY_CALL_MUTED, json.optBoolean("muted"))
+                    .putString(WearCallDataLayer.KEY_CALL_ID, callId)
+                    .putString(WearCallDataLayer.KEY_CALL_ROOM, room)
+                    .putString(WearCallDataLayer.KEY_CALL_USERNAME, username)
+                    .apply()
+
+                if (active && changed) {
+                    Notify.showCall(this, muted, room, username)
+                } else if (!active) {
+                    Notify.clearCall(this)
+                }
+                Log.i(TAG, "Estado de llamada actualizado: $active")
             }
 
             else -> Log.i(TAG, "Ruta ignorada: $path")
@@ -116,14 +143,26 @@ class WearDataLayerListener : WearableListenerService() {
         const val PATH_LINK = "/rooms4ums/link"
         const val PATH_OPEN_ROOM = "/rooms4ums/open-room"
         const val PATH_POST_CREATED = "/rooms4ums/post-created"
-        const val PATH_CHAT = "/rooms4ums/chat"
-        const val PATH_CHAT_REPLY = "/rooms4ums/chat-reply"
     }
+}
+
+object WearCallDataLayer {
+    const val PATH_CALL_STATUS = "/rooms4ums/call-status"
+    const val PATH_CALL_ACTION = "/rooms4ums/call-action"
+    const val CALL_PREFERENCES = "rooms4ums_wear_call"
+    const val KEY_CALL_ACTIVE = "active"
+    const val KEY_CALL_MUTED = "muted"
+    const val KEY_CALL_ID = "call_id"
+    const val KEY_CALL_ROOM = "room"
+    const val KEY_CALL_USERNAME = "username"
+    const val ACTION_TOGGLE_MUTE = "toggle_mute"
+    const val ACTION_HANG_UP = "hang_up"
 }
 
 /** Publica notificaciones propias del módulo de wearable. */
 object Notify {
     private const val CHANNEL_ID = WearApplication.CHANNEL_EVENTS
+    private const val CALL_NOTIFICATION_ID = 4_206
 
     fun show(context: android.content.Context, text: String) {
         val manager = context.getSystemService(android.app.NotificationManager::class.java) ?: return
@@ -144,5 +183,66 @@ object Notify {
             .build()
 
         manager.notify(text.hashCode() and 0x7fffffff, notification)
+    }
+
+    fun showCall(context: Context, muted: Boolean, room: String, username: String) {
+        val manager = context.getSystemService(NotificationManager::class.java) ?: return
+        manager.createNotificationChannel(
+            android.app.NotificationChannel(
+                CHANNEL_ID,
+                "Eventos de Rooms4ums",
+                NotificationManager.IMPORTANCE_HIGH,
+            )
+        )
+
+        fun actionIntent(action: String, requestCode: Int): PendingIntent {
+            val intent = Intent(context, MainActivity::class.java)
+                .setAction(MainActivity.ACTION_CALL_CONTROL)
+                .putExtra(MainActivity.EXTRA_CALL_ACTION, action)
+            return PendingIntent.getActivity(
+                context,
+                requestCode,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        }
+
+        val openIntent = PendingIntent.getActivity(
+            context,
+            CALL_NOTIFICATION_ID,
+            Intent(context, MainActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val text = buildString {
+            if (username.isNotBlank()) append("$username · ")
+            append(room.ifBlank { "Canal de voz" })
+            if (muted) append(" · MICRÓFONO SILENCIADO")
+        }
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_watch_notification)
+            .setContentTitle("EN LLAMADA · Rooms4ums")
+            .setContentText(text)
+            .setCategory(NotificationCompat.CATEGORY_CALL)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setContentIntent(openIntent)
+            .addAction(
+                R.drawable.ic_watch_notification,
+                if (muted) "ACTIVAR MICRO" else "SILENCIAR",
+                actionIntent(WearCallDataLayer.ACTION_TOGGLE_MUTE, 1),
+            )
+            .addAction(
+                R.drawable.ic_watch_notification,
+                "COLGAR",
+                actionIntent(WearCallDataLayer.ACTION_HANG_UP, 2),
+            )
+            .build()
+        manager.notify(CALL_NOTIFICATION_ID, notification)
+    }
+
+    fun clearCall(context: Context) {
+        context.getSystemService(NotificationManager::class.java)
+            ?.cancel(CALL_NOTIFICATION_ID)
     }
 }

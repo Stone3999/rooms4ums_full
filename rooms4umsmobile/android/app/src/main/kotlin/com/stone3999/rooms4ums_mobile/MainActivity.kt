@@ -36,14 +36,16 @@ class MainActivity : FlutterActivity() {
                         result,
                     )
                     "test" -> test(result)
-                    "chat" -> chat(
-                        call.argument<String>("id"),
-                        call.argument<String>("sender"),
-                        call.argument<String>("message"),
+                    "callStatus" -> sendCallStatus(
+                        call.argument<Boolean>("active") ?: false,
+                        call.argument<Boolean>("muted") ?: false,
+                        call.argument<String>("callId").orEmpty(),
+                        call.argument<String>("room").orEmpty(),
+                        call.argument<String>("username").orEmpty(),
                         result,
                     )
                     "telemetry" -> telemetry(result)
-                    "chatReplies" -> chatReplies(result)
+                    "callActions" -> callActions(result)
                     else -> result.notImplemented()
                 }
             }
@@ -146,24 +148,27 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    /** Envía un mensaje breve directo al reloj por Data Layer (Práctica 6). */
-    private fun chat(id: String?, sender: String?, message: String?, result: MethodChannel.Result) {
-        val clean = message?.trim().orEmpty()
-        if (clean.isEmpty()) {
-            result.success(mapOf("ok" to false, "error" to "MENSAJE VACÍO"))
-            return
-        }
-
+    /** Keeps the watch's in-call controls synchronized with the phone call. */
+    private fun sendCallStatus(
+        active: Boolean,
+        muted: Boolean,
+        callId: String,
+        room: String,
+        username: String,
+        result: MethodChannel.Result,
+    ) {
         withWearAppNode(result) { node ->
             val payload = JSONObject()
-                .put("id", id ?: System.currentTimeMillis().toString())
-                .put("sender", sender ?: "Smartphone")
-                .put("message", clean)
+                .put("active", active)
+                .put("muted", muted)
+                .put("callId", callId)
+                .put("room", room)
+                .put("username", username)
                 .toString()
                 .toByteArray(Charsets.UTF_8)
 
             Wearable.getMessageClient(this)
-                .sendMessage(node.id, PATH_CHAT, payload)
+                .sendMessage(node.id, PATH_CALL_STATUS, payload)
                 .addOnSuccessListener { result.success(mapOf("ok" to true)) }
                 .addOnFailureListener { e ->
                     result.success(mapOf("ok" to false, "error" to e.message))
@@ -171,14 +176,14 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun chatReplies(result: MethodChannel.Result) {
+    private fun callActions(result: MethodChannel.Result) {
         val preferences = getSharedPreferences(
-            WearReplyListener.PREFERENCES,
+            WearCallActionListener.PREFERENCES,
             MODE_PRIVATE,
         )
-        val replies = preferences.getString(WearReplyListener.KEY_REPLIES, "[]") ?: "[]"
-        preferences.edit().remove(WearReplyListener.KEY_REPLIES).apply()
-        result.success(replies)
+        val actions = preferences.getString(WearCallActionListener.KEY_ACTIONS, "[]") ?: "[]"
+        preferences.edit().remove(WearCallActionListener.KEY_ACTIONS).apply()
+        result.success(actions)
     }
 
     private fun withWearAppNode(
@@ -243,7 +248,7 @@ class MainActivity : FlutterActivity() {
 
         private const val PATH_LINK = "/rooms4ums/link"
         private const val PATH_POST_CREATED = "/rooms4ums/post-created"
-        private const val PATH_CHAT = "/rooms4ums/chat"
+        private const val PATH_CALL_STATUS = "/rooms4ums/call-status"
         private const val PATH_TELEMETRY = "/rooms4ums/telemetry"
 
         private const val KEY_MAGNITUDE = "mag"

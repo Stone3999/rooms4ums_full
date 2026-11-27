@@ -11,7 +11,8 @@ android {
     compileSdk = 33
 
     defaultConfig {
-        applicationId = "com.rooms4ums.wear"
+        // Wear Data Layer requires the same application ID on phone and watch.
+        applicationId = "com.stone3999.rooms4ums_mobile"
         minSdk = 26
         targetSdk = 33
         versionCode = 1

@@ -61,46 +61,55 @@
                 android:fontFamily="monospace" />
 
             <TextView
+                android:id="@+id/call_status"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:text="MENSAJES"
+                android:layout_marginTop="14dp"
+                android:gravity="center"
+                android:text="SIN LLAMADA ACTIVA"
                 android:textColor="@color/acento"
-                android:textSize="10sp"
+                android:textSize="11sp"
                 android:textStyle="bold"
                 android:fontFamily="monospace" />
 
-            <TextView
-                android:id="@+id/chat_history"
+            <LinearLayout
+                android:id="@+id/call_controls"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:maxLines="5"
-                android:text="Sin mensajes todavía"
-                android:textColor="@color/texto"
-                android:textSize="9sp"
-                android:fontFamily="monospace" />
+                android:layout_marginTop="10dp"
+                android:gravity="center"
+                android:orientation="horizontal"
+                android:visibility="gone">
 
-            <EditText
-                android:id="@+id/chat_input"
+                <Button
+                    android:id="@+id/mute_call"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:minHeight="40dp"
+                    android:text="SILENCIAR"
+                    android:textSize="9sp" />
+
+                <Button
+                    android:id="@+id/hangup_call"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:layout_weight="1"
+                    android:minHeight="40dp"
+                    android:text="COLGAR"
+                    android:textSize="9sp" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/call_feedback"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
-                android:hint="Responder al teléfono"
-                android:inputType="textCapSentences"
-                android:maxLength="140"
-                android:singleLine="true"
-                android:textColor="@color/texto"
-                android:textColorHint="@color/texto_suave"
-                android:textSize="10sp"
+                android:gravity="center"
+                android:textColor="@color/texto_suave"
+                android:textSize="8sp"
                 android:fontFamily="monospace" />
-
-            <Button
-                android:id="@+id/chat_send"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="ENVIAR"
-                android:textSize="9sp" />
 
         </LinearLayout>
     </ScrollView>

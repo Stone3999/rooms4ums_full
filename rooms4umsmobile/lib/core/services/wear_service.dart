@@ -99,8 +99,28 @@ class WearResult {
   const WearResult(this.ok, this.message);
 }
 
+class WearCallAction {
+  final String id;
+  final String callId;
+  final String action;
+
+  const WearCallAction({
+    required this.id,
+    required this.callId,
+    required this.action,
+  });
+
+  factory WearCallAction.fromMap(Map raw) => WearCallAction(
+    id: (raw['id'] ?? '').toString(),
+    callId: (raw['callId'] ?? '').toString(),
+    action: (raw['action'] ?? '').toString(),
+  );
+}
+
 class WearService {
   static const MethodChannel _channel = MethodChannel('rooms4ums/wear');
+  static const String actionToggleMute = 'toggle_mute';
+  static const String actionHangUp = 'hang_up';
 
   static Future<WearStatus> status() async {
     try {
@@ -168,40 +188,45 @@ class WearService {
     }
   }
 
-  /// PRÁCTICA 6 - Envía un mensaje directo por el Data Layer de Wear OS.
-  static Future<WearResult> sendChatMessage({
-    required String sender,
-    required String message,
-    required String messageId,
+  static Future<WearResult> sendCallStatus({
+    required bool active,
+    required bool muted,
+    required String callId,
+    required String room,
+    required String username,
   }) async {
     try {
-      final raw = await _channel.invokeMethod<dynamic>('chat', {
-        'id': messageId,
-        'sender': sender,
-        'message': message,
+      final raw = await _channel.invokeMethod<dynamic>('callStatus', {
+        'active': active,
+        'muted': muted,
+        'callId': callId,
+        'room': room,
+        'username': username,
       });
       final map = raw is Map ? raw : const <String, dynamic>{};
       final ok = map['ok'] == true;
       return WearResult(
         ok,
-        ok ? 'MENSAJE ENVIADO AL RELOJ' : (map['error'] ?? 'ENLACE NO DISPONIBLE').toString(),
+        ok
+            ? 'ESTADO DE LLAMADA ENVIADO'
+            : (map['error'] ?? 'ENLACE NO DISPONIBLE').toString(),
       );
     } on MissingPluginException {
       return const WearResult(false, 'PUENTE ANDROID NO DISPONIBLE');
     } on PlatformException catch (e) {
-      return WearResult(false, e.message ?? 'ERROR AL ENVIAR MENSAJE');
+      return WearResult(false, e.message ?? 'ERROR AL ENVIAR ESTADO DE LLAMADA');
     }
   }
 
-  static Future<List<Map<String, dynamic>>> chatReplies() async {
-    final raw = await _channel.invokeMethod<dynamic>('chatReplies');
+  static Future<List<WearCallAction>> takeCallActions() async {
+    final raw = await _channel.invokeMethod<dynamic>('callActions');
     final decoded = raw is String ? jsonDecode(raw) : raw;
     if (decoded is! List) {
-      throw const FormatException('Respuesta inválida del reloj.');
+      throw const FormatException('Acciones inválidas recibidas del reloj.');
     }
     return decoded
         .whereType<Map>()
-        .map((reply) => Map<String, dynamic>.from(reply))
+        .map(WearCallAction.fromMap)
         .toList();
   }
 }

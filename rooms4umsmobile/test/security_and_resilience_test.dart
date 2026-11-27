@@ -64,23 +64,14 @@ void main() {
     });
   });
 
-  group('Práctica 6 - Interacción entre dispositivos (WearableScreen)', () {
-    testWidgets('valida mensajes y no simula entregas sin un reloj conectado', (tester) async {
+  group('Wear OS - Controles de llamada', () {
+    testWidgets('no ofrece chat de texto y muestra el estado de llamada inactivo', (tester) async {
       await tester.pumpWidget(MaterialApp(theme: AppTheme.darkRetroTheme, home: const WearableScreen()));
       await tester.pump();
 
-      // Envío vacío rechazado
-      await tester.enterText(find.byType(TextField).last, '   ');
-      await tester.tap(find.byIcon(Icons.send));
-      await tester.pump();
-      expect(find.text('EL MENSAJE NO PUEDE ESTAR VACÍO'), findsOneWidget);
-
-      // Envío desde Dispositivo A (Smartphone)
-      await tester.enterText(find.byType(TextField).last, 'Hola reloj');
-      await tester.tap(find.byIcon(Icons.send));
-      await tester.pump();
-      expect(find.text('CONECTA UN RELOJ CON LA APP ROOMS4UMS INSTALADA'), findsOneWidget);
-      expect(find.text('Teléfono: Hola reloj'), findsNothing);
+      expect(find.byType(TextField), findsNothing);
+      expect(find.text('SIN LLAMADA ACTIVA'), findsOneWidget);
+      expect(find.textContaining('MENSAJES REALES'), findsNothing);
     });
   });
 

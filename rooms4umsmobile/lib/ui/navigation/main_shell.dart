@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 
+import 'package:rooms4ums_mobile/core/services/voice_service.dart';
 import 'package:rooms4ums_mobile/core/theme/app_colors.dart';
 import 'package:rooms4ums_mobile/ui/screens/home_screen.dart';
 import 'package:rooms4ums_mobile/ui/screens/popular_screen.dart';
@@ -17,7 +18,6 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int _index = 0;
-  bool _voiceTabOpened = false;
 
   static const List<Widget> _tabs = <Widget>[
     HomeScreen(),
@@ -28,15 +28,15 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: IndexedStack(
-        index: _index,
-        children: [
-          ..._tabs,
-          _voiceTabOpened ? const VoiceScreen() : const SizedBox.shrink(),
-        ],
-      ),
-      bottomNavigationBar: _buildBar(),
+    return AnimatedBuilder(
+      animation: VoiceService.instance,
+      builder: (context, _) {
+        final inVoiceRoom = VoiceService.instance.activeRoomId != null;
+        return Scaffold(
+          body: IndexedStack(index: _index, children: _tabs),
+          bottomNavigationBar: inVoiceRoom ? null : _buildBar(),
+        );
+      },
     );
   }
 
@@ -69,10 +69,7 @@ class _MainShellState extends State<MainShell> {
 
     return Expanded(
       child: InkWell(
-        onTap: () => setState(() {
-          _index = index;
-          if (index == 3) _voiceTabOpened = true;
-        }),
+        onTap: () => setState(() => _index = index),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [

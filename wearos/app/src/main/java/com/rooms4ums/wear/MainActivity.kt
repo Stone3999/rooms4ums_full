@@ -7,7 +7,6 @@ import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.widget.Button
-import android.widget.EditText
 import android.widget.TextView
 import androidx.core.app.ActivityCompat
 import com.google.android.gms.wearable.Wearable
@@ -29,15 +28,17 @@ class MainActivity : Activity() {
     private lateinit var statusText: TextView
     private lateinit var sessionText: TextView
     private lateinit var sensorText: TextView
-    private lateinit var chatHistoryText: TextView
-    private lateinit var chatInput: EditText
+    private lateinit var callStatusText: TextView
+    private lateinit var callFeedbackText: TextView
+    private lateinit var muteCallButton: Button
+    private lateinit var hangUpButton: Button
 
     /** Se dispara cuando el servicio guarda el JWT que mandó el celular. */
     private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key == SharedPrefs.KEY_JWT) updateSessionStatus()
     }
-    private val chatPrefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-        if (key == WearChatStore.KEY_MESSAGES) updateChatHistory()
+    private val callPrefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key in CALL_STATE_KEYS) updateCallStatus()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -47,35 +48,51 @@ class MainActivity : Activity() {
         statusText = findViewById(R.id.status)
         sessionText = findViewById(R.id.sesion)
         sensorText = findViewById(R.id.sensores)
-        chatHistoryText = findViewById(R.id.chat_history)
-        chatInput = findViewById(R.id.chat_input)
-        findViewById<Button>(R.id.chat_send).setOnClickListener { sendChatReply() }
+        callStatusText = findViewById(R.id.call_status)
+        callFeedbackText = findViewById(R.id.call_feedback)
+        muteCallButton = findViewById(R.id.mute_call)
+        hangUpButton = findViewById(R.id.hangup_call)
+        muteCallButton.setOnClickListener {
+            sendCallAction(WearCallDataLayer.ACTION_TOGGLE_MUTE)
+        }
+        hangUpButton.setOnClickListener {
+            sendCallAction(WearCallDataLayer.ACTION_HANG_UP)
+        }
 
         requestNotificationPermission()
         startTelemetryService()
         checkPhoneConnection()
         handleDeepLink(intent)
         updateSessionStatus()
-        updateChatHistory()
+        updateCallStatus()
+        handleCallAction(intent)
     }
 
     override fun onResume() {
         super.onResume()
         SharedPrefs.prefs(this).registerOnSharedPreferenceChangeListener(prefsListener)
-        WearChatStore.prefs(this).registerOnSharedPreferenceChangeListener(chatPrefsListener)
+        getSharedPreferences(
+            WearCallDataLayer.CALL_PREFERENCES,
+            MODE_PRIVATE,
+        ).registerOnSharedPreferenceChangeListener(callPrefsListener)
         updateSessionStatus()
-        updateChatHistory()
+        updateCallStatus()
     }
 
     override fun onPause() {
         SharedPrefs.prefs(this).unregisterOnSharedPreferenceChangeListener(prefsListener)
-        WearChatStore.prefs(this).unregisterOnSharedPreferenceChangeListener(chatPrefsListener)
+        getSharedPreferences(
+            WearCallDataLayer.CALL_PREFERENCES,
+            MODE_PRIVATE,
+        ).unregisterOnSharedPreferenceChangeListener(callPrefsListener)
         super.onPause()
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        setIntent(intent)
         handleDeepLink(intent)
+        handleCallAction(intent)
     }
 
     /**
@@ -96,14 +113,48 @@ class MainActivity : Activity() {
         )
     }
 
-    private fun updateChatHistory() {
-        chatHistoryText.text = WearChatStore.history(this)
+    private fun updateCallStatus() {
+        val preferences = getSharedPreferences(
+            WearCallDataLayer.CALL_PREFERENCES,
+            MODE_PRIVATE,
+        )
+        val active = preferences.getBoolean(WearCallDataLayer.KEY_CALL_ACTIVE, false)
+        val muted = preferences.getBoolean(WearCallDataLayer.KEY_CALL_MUTED, false)
+        val room = preferences.getString(WearCallDataLayer.KEY_CALL_ROOM, "").orEmpty()
+        val username = preferences.getString(WearCallDataLayer.KEY_CALL_USERNAME, "").orEmpty()
+
+        callStatusText.text = if (active) {
+            "EN LLAMADA${room.takeIf(String::isNotBlank)?.let { ": $it" } ?: ""}"
+        } else {
+            "SIN LLAMADA ACTIVA"
+        }
+        callStatusText.setTextColor(
+            getColor(if (active) R.color.acento else R.color.texto_suave)
+        )
+        muteCallButton.text = if (muted) "ACTIVAR MICRO" else "SILENCIAR"
+        muteCallButton.isEnabled = active
+        hangUpButton.isEnabled = active
+        findViewById<android.view.View>(R.id.call_controls).visibility =
+            if (active) android.view.View.VISIBLE else android.view.View.GONE
+        callFeedbackText.text = if (active && username.isNotBlank()) {
+            "EN CURSO EN EL TELÉFONO DE $username"
+        } else {
+            ""
+        }
     }
 
-    private fun sendChatReply() {
-        val message = chatInput.text.toString().trim()
-        if (message.isEmpty()) {
-            chatInput.error = "Escribe un mensaje"
+    private fun sendCallAction(action: String) {
+        val preferences = getSharedPreferences(
+            WearCallDataLayer.CALL_PREFERENCES,
+            MODE_PRIVATE,
+        )
+        if (!preferences.getBoolean(WearCallDataLayer.KEY_CALL_ACTIVE, false)) {
+            updateCallStatus()
+            return
+        }
+        val callId = preferences.getString(WearCallDataLayer.KEY_CALL_ID, "").orEmpty()
+        if (callId.isBlank()) {
+            callFeedbackText.text = "ESTADO DE LLAMADA DESACTUALIZADO"
             return
         }
 
@@ -111,34 +162,35 @@ class MainActivity : Activity() {
             .addOnSuccessListener { nodes ->
                 val phone = nodes.firstOrNull()
                 if (phone == null) {
-                    sensorText.text = getString(R.string.status_sin_telefono)
+                    callFeedbackText.text = getString(R.string.status_sin_telefono)
                     return@addOnSuccessListener
                 }
 
-                val id = UUID.randomUUID().toString()
                 val payload = JSONObject()
-                    .put("id", id)
-                    .put("sender", "Wear OS")
-                    .put("message", message)
+                    .put("id", UUID.randomUUID().toString())
+                    .put("callId", callId)
+                    .put("action", action)
                     .toString()
                     .toByteArray(Charsets.UTF_8)
 
                 Wearable.getMessageClient(this)
-                    .sendMessage(phone.id, WearDataLayerListener.PATH_CHAT_REPLY, payload)
+                    .sendMessage(phone.id, WearCallDataLayer.PATH_CALL_ACTION, payload)
                     .addOnSuccessListener {
-                        WearChatStore.append(this, id, "Wear OS", message)
-                        chatInput.text.clear()
-                        chatInput.error = null
-                        updateChatHistory()
-                        sensorText.text = "Mensaje enviado al teléfono"
+                        callFeedbackText.text = "SOLICITUD ENVIADA AL TELÉFONO"
                     }
                     .addOnFailureListener {
-                        sensorText.text = getString(R.string.status_error_enlace)
+                        callFeedbackText.text = getString(R.string.status_error_enlace)
                     }
             }
             .addOnFailureListener {
-                sensorText.text = getString(R.string.status_error_enlace)
+                callFeedbackText.text = getString(R.string.status_error_enlace)
             }
+    }
+
+    private fun handleCallAction(intent: Intent?) {
+        if (intent?.action != ACTION_CALL_CONTROL) return
+        val action = intent.getStringExtra(EXTRA_CALL_ACTION) ?: return
+        sendCallAction(action)
     }
 
     /** PRÁCTICA 1 - El servicio en primer plano mantiene los sensores vivos. */
@@ -182,5 +234,14 @@ class MainActivity : Activity() {
 
     companion object {
         private const val TAG = "Rooms4umsWearMain"
+        const val ACTION_CALL_CONTROL = "com.rooms4ums.wear.CALL_CONTROL"
+        const val EXTRA_CALL_ACTION = "call_action"
+        private val CALL_STATE_KEYS = setOf(
+            WearCallDataLayer.KEY_CALL_ACTIVE,
+            WearCallDataLayer.KEY_CALL_MUTED,
+            WearCallDataLayer.KEY_CALL_ID,
+            WearCallDataLayer.KEY_CALL_ROOM,
+            WearCallDataLayer.KEY_CALL_USERNAME,
+        )
     }
 }
