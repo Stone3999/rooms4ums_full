@@ -17,7 +17,7 @@
     <!-- El sensor de ritmo cardiaco es opcional: no todos los relojes lo traen. -->
     <uses-feature android:name="android.hardware.sensor.heartrate" android:required="false"/>
     <uses-feature android:name="android.hardware.sensor.accelerometer" android:required="true"/>
-    <uses-feature android:name="android.hardware.type.watch" android:required="false"/>
+    <uses-feature android:name="android.hardware.type.watch"/>
 
     <application
         android:name=".WearApplication"
