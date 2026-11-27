@@ -3,6 +3,7 @@ package com.stone3999.rooms4ums_mobile
 import android.net.Uri
 import com.google.android.gms.wearable.CapabilityClient
 import com.google.android.gms.wearable.DataMapItem
+import com.google.android.gms.wearable.Node
 import com.google.android.gms.wearable.Wearable
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -16,7 +17,7 @@ import org.json.JSONObject
  * MethodChannel. El reloj se descubre con NodeClient (nodos conectados) y con
  * CapabilityClient (capability `rooms4ums_wear` declarada en el manifiesto del
  * reloj), se le envía la sesión por MessageClient y se lee su telemetría con
- * DataClient. Todo el transporte lo hace Google Play Services por BLE.
+ * DataClient a través del Google Play Services Data Layer.
  */
 class MainActivity : FlutterActivity() {
 
@@ -36,11 +37,13 @@ class MainActivity : FlutterActivity() {
                     )
                     "test" -> test(result)
                     "chat" -> chat(
+                        call.argument<String>("id"),
                         call.argument<String>("sender"),
                         call.argument<String>("message"),
                         result,
                     )
                     "telemetry" -> telemetry(result)
+                    "chatReplies" -> chatReplies(result)
                     else -> result.notImplemented()
                 }
             }
@@ -52,9 +55,8 @@ class MainActivity : FlutterActivity() {
             .addOnSuccessListener { nodes ->
                 Wearable.getCapabilityClient(this)
                     .getCapability(WEAR_CAPABILITY, CapabilityClient.FILTER_REACHABLE)
-                    .addOnCompleteListener { capability ->
-                        val wearIds = capability.result?.nodes?.map { it.id }?.toSet() ?: emptySet()
-
+                    .addOnSuccessListener { capability ->
+                        val wearIds = capability.nodes.map { it.id }.toSet()
                         val payload = nodes.map { node ->
                             mapOf(
                                 "id" to node.id,
@@ -68,6 +70,22 @@ class MainActivity : FlutterActivity() {
                             mapOf(
                                 "connected" to payload.isNotEmpty(),
                                 "nodes" to payload,
+                            )
+                        )
+                    }
+                    .addOnFailureListener { e ->
+                        result.success(
+                            mapOf(
+                                "connected" to nodes.isNotEmpty(),
+                                "nodes" to nodes.map { node ->
+                                    mapOf(
+                                        "id" to node.id,
+                                        "name" to (node.displayName ?: "Wear OS"),
+                                        "nearby" to node.isNearby,
+                                        "wearApp" to false,
+                                    )
+                                },
+                                "error" to e.message,
                             )
                         )
                     }
@@ -90,89 +108,98 @@ class MainActivity : FlutterActivity() {
             return
         }
 
-        Wearable.getNodeClient(this).connectedNodes
-            .addOnSuccessListener { nodes ->
-                val node = nodes.firstOrNull()
-                if (node == null) {
-                    result.success(mapOf("ok" to false, "error" to "NO HAY RELOJ CONECTADO"))
-                    return@addOnSuccessListener
+        withWearAppNode(result) { node ->
+            val payload = JSONObject()
+                .put("jwt", jwt)
+                .put("username", username ?: "")
+                .toString()
+                .toByteArray(Charsets.UTF_8)
+
+            Wearable.getMessageClient(this)
+                .sendMessage(node.id, PATH_LINK, payload)
+                .addOnSuccessListener {
+                    result.success(
+                        mapOf("ok" to true, "node" to (node.displayName ?: "Wear OS"))
+                    )
                 }
-
-                val payload = JSONObject()
-                    .put("jwt", jwt)
-                    .put("username", username ?: "")
-                    .toString()
-                    .toByteArray(Charsets.UTF_8)
-
-                Wearable.getMessageClient(this)
-                    .sendMessage(node.id, PATH_LINK, payload)
-                    .addOnSuccessListener {
-                        result.success(
-                            mapOf("ok" to true, "node" to (node.displayName ?: "Wear OS"))
-                        )
-                    }
-                    .addOnFailureListener { e ->
-                        result.success(mapOf("ok" to false, "error" to e.message))
-                    }
-            }
-            .addOnFailureListener { e ->
-                result.success(mapOf("ok" to false, "error" to e.message))
-            }
+                .addOnFailureListener { e ->
+                    result.success(mapOf("ok" to false, "error" to e.message))
+                }
+        }
     }
 
     /** Manda un evento de prueba: el reloj debe mostrar una notificación. */
     private fun test(result: MethodChannel.Result) {
-        Wearable.getNodeClient(this).connectedNodes
-            .addOnSuccessListener { nodes ->
-                val node = nodes.firstOrNull()
-                if (node == null) {
-                    result.success(mapOf("ok" to false, "error" to "NO HAY RELOJ CONECTADO"))
-                    return@addOnSuccessListener
+        withWearAppNode(result) { node ->
+            val payload = JSONObject()
+                .put("room", "general")
+                .put("title", "Prueba desde el celular")
+                .toString()
+                .toByteArray(Charsets.UTF_8)
+
+            Wearable.getMessageClient(this)
+                .sendMessage(node.id, PATH_POST_CREATED, payload)
+                .addOnSuccessListener { result.success(mapOf("ok" to true)) }
+                .addOnFailureListener { e ->
+                    result.success(mapOf("ok" to false, "error" to e.message))
                 }
-
-                val payload = JSONObject()
-                    .put("room", "general")
-                    .put("title", "Prueba desde el celular")
-                    .toString()
-                    .toByteArray(Charsets.UTF_8)
-
-                Wearable.getMessageClient(this)
-                    .sendMessage(node.id, PATH_POST_CREATED, payload)
-                    .addOnSuccessListener { result.success(mapOf("ok" to true)) }
-                    .addOnFailureListener { e ->
-                        result.success(mapOf("ok" to false, "error" to e.message))
-                    }
-            }
-            .addOnFailureListener { e ->
-                result.success(mapOf("ok" to false, "error" to e.message))
-            }
+        }
     }
 
     /** Envía un mensaje breve directo al reloj por Data Layer (Práctica 6). */
-    private fun chat(sender: String?, message: String?, result: MethodChannel.Result) {
+    private fun chat(id: String?, sender: String?, message: String?, result: MethodChannel.Result) {
         val clean = message?.trim().orEmpty()
         if (clean.isEmpty()) {
             result.success(mapOf("ok" to false, "error" to "MENSAJE VACÍO"))
             return
         }
 
-        Wearable.getNodeClient(this).connectedNodes
-            .addOnSuccessListener { nodes ->
-                val node = nodes.firstOrNull()
-                if (node == null) {
-                    result.success(mapOf("ok" to false, "error" to "NO HAY RELOJ CONECTADO"))
-                    return@addOnSuccessListener
+        withWearAppNode(result) { node ->
+            val payload = JSONObject()
+                .put("id", id ?: System.currentTimeMillis().toString())
+                .put("sender", sender ?: "Smartphone")
+                .put("message", clean)
+                .toString()
+                .toByteArray(Charsets.UTF_8)
+
+            Wearable.getMessageClient(this)
+                .sendMessage(node.id, PATH_CHAT, payload)
+                .addOnSuccessListener { result.success(mapOf("ok" to true)) }
+                .addOnFailureListener { e ->
+                    result.success(mapOf("ok" to false, "error" to e.message))
                 }
+        }
+    }
 
-                val payload = JSONObject()
-                    .put("sender", sender ?: "Smartphone")
-                    .put("message", clean)
-                    .toString()
-                    .toByteArray(Charsets.UTF_8)
+    private fun chatReplies(result: MethodChannel.Result) {
+        val preferences = getSharedPreferences(
+            WearReplyListener.PREFERENCES,
+            MODE_PRIVATE,
+        )
+        val replies = preferences.getString(WearReplyListener.KEY_REPLIES, "[]") ?: "[]"
+        preferences.edit().remove(WearReplyListener.KEY_REPLIES).apply()
+        result.success(replies)
+    }
 
-                Wearable.getMessageClient(this)
-                    .sendMessage(node.id, PATH_CHAT, payload)
-                    .addOnSuccessListener { result.success(mapOf("ok" to true)) }
+    private fun withWearAppNode(
+        result: MethodChannel.Result,
+        action: (Node) -> Unit,
+    ) {
+        Wearable.getCapabilityClient(this)
+            .getCapability(WEAR_CAPABILITY, CapabilityClient.FILTER_REACHABLE)
+            .addOnSuccessListener { capability ->
+                val wearIds = capability.nodes.map { it.id }.toSet()
+                Wearable.getNodeClient(this).connectedNodes
+                    .addOnSuccessListener { nodes ->
+                        val node = nodes.firstOrNull { it.id in wearIds }
+                        if (node == null) {
+                            result.success(
+                                mapOf("ok" to false, "error" to "NO HAY UNA APP ROOMS4UMS CONECTADA EN EL RELOJ")
+                            )
+                        } else {
+                            action(node)
+                        }
+                    }
                     .addOnFailureListener { e ->
                         result.success(mapOf("ok" to false, "error" to e.message))
                     }

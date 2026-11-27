@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'package:rooms4ums_mobile/core/services/api_service.dart';
@@ -9,11 +10,13 @@ import 'package:rooms4ums_mobile/core/theme/app_colors.dart';
 import 'package:rooms4ums_mobile/core/utils/security_validators.dart';
 
 class _DeviceChatMessage {
+  final String id;
   final String sender;
   final String body;
   final String time;
 
   const _DeviceChatMessage({
+    required this.id,
     required this.sender,
     required this.body,
     required this.time,
@@ -22,7 +25,7 @@ class _DeviceChatMessage {
 
 /// PRÁCTICA 2 - Apartado para conectar el reloj desde el celular.
 ///
-/// Usa el Data Layer API (BLE de Google Play Services). Al vincular, el reloj
+/// Usa el Data Layer de Google Play Services. Al vincular, el reloj
 /// recibe el JWT del celular y registra su propio token FCM: desde ese momento
 /// las notificaciones del foro llegan también a la muñeca.
 class WearableScreen extends StatefulWidget {
@@ -36,12 +39,11 @@ class _WearableScreenState extends State<WearableScreen> {
   WearStatus? _status;
   WearTelemetry? _telemetry;
   Timer? _timer;
+  bool _refreshing = false;
 
   final _messageController = TextEditingController();
   final List<_DeviceChatMessage> _messages = <_DeviceChatMessage>[];
-  bool _senderIsPhone = true;
-  int _phoneSentCount = 0;
-  int _watchSentCount = 0;
+  final Set<String> _seenChatIds = <String>{};
   String? _chatError;
 
   bool _loading = true;
@@ -62,19 +64,62 @@ class _WearableScreenState extends State<WearableScreen> {
   }
 
   Future<void> _refresh({bool silent = false}) async {
+    if (_refreshing) return;
+    _refreshing = true;
     if (!silent) setState(() => _loading = true);
 
-    final results = await Future.wait<Object?>([
-      WearService.status(),
-      WearService.telemetry(),
-    ]);
+    try {
+      final results = await Future.wait<Object?>([
+        WearService.status(),
+        WearService.telemetry(),
+      ]);
+      if (!mounted) return;
 
-    if (!mounted) return;
-    setState(() {
-      _status = results[0] as WearStatus;
-      _telemetry = results[1] as WearTelemetry?;
-      _loading = false;
-    });
+      final status = results[0] as WearStatus;
+      setState(() {
+        _status = status;
+        _telemetry = results[1] as WearTelemetry?;
+        _loading = false;
+      });
+
+      if (status.connected && status.wearAppInstalled) {
+        try {
+          final replies = await WearService.chatReplies();
+          if (mounted) _mergeChatReplies(replies);
+        } on PlatformException catch (error) {
+          if (mounted) {
+            setState(() => _chatError = error.message ?? 'NO SE PUDIERON LEER LAS RESPUESTAS DEL RELOJ');
+          }
+        } on FormatException catch (error) {
+          if (mounted) setState(() => _chatError = error.message);
+        }
+      }
+    } finally {
+      _refreshing = false;
+      if (mounted && _loading) setState(() => _loading = false);
+    }
+  }
+
+  void _mergeChatReplies(List<Map<String, dynamic>> replies) {
+    final incoming = <_DeviceChatMessage>[];
+    for (final reply in replies) {
+      final id = reply['id']?.toString() ?? '';
+      final body = reply['message']?.toString().trim() ?? '';
+      if (id.isEmpty || body.isEmpty || !_seenChatIds.add(id)) continue;
+      final timestamp = (reply['timestamp'] as num?)?.toInt();
+      final time = timestamp == null
+          ? _formatNow()
+          : DateTime.fromMillisecondsSinceEpoch(timestamp).toLocal().toString().substring(11, 19);
+      incoming.add(_DeviceChatMessage(
+        id: id,
+        sender: reply['sender']?.toString() ?? 'Wear OS',
+        body: body,
+        time: time,
+      ));
+    }
+    if (incoming.isNotEmpty && mounted) {
+      setState(() => _messages.insertAll(0, incoming.reversed));
+    }
   }
 
   String _usernameFromJwt(String? token) {
@@ -146,37 +191,49 @@ class _WearableScreenState extends State<WearableScreen> {
     }
 
     final text = raw.trim();
-    final watchName = (_status?.nodes.isNotEmpty ?? false) ? _status!.nodes.first.name : 'Wear OS';
-    final senderName = _senderIsPhone ? 'Smartphone (A)' : '$watchName (B)';
+    final status = _status;
+    if (status?.connected != true || status?.wearAppInstalled != true) {
+      setState(() => _chatError = 'CONECTA UN RELOJ CON LA APP ROOMS4UMS INSTALADA');
+      return;
+    }
+
+    final id = DateTime.now().microsecondsSinceEpoch.toString();
+    setState(() {
+      _busy = true;
+      _chatError = null;
+    });
+    final result = await WearService.sendChatMessage(
+      sender: 'Teléfono',
+      message: text,
+      messageId: id,
+    );
+    if (!mounted) return;
+
+    setState(() => _busy = false);
+    if (!result.ok) {
+      setState(() => _chatError = result.message.toUpperCase());
+      return;
+    }
 
     setState(() {
-      _chatError = null;
+      _seenChatIds.add(id);
       _messages.insert(
         0,
-        _DeviceChatMessage(sender: senderName, body: text, time: _formatNow()),
+        _DeviceChatMessage(
+          id: id,
+          sender: 'Teléfono',
+          body: text,
+          time: _formatNow(),
+        ),
       );
-      if (_senderIsPhone) {
-        _phoneSentCount++;
-      } else {
-        _watchSentCount++;
-      }
       _messageController.clear();
     });
-
-    if (_senderIsPhone && (_status?.connected ?? false)) {
-      final result = await WearService.sendChatMessage(sender: 'Smartphone', message: text);
-      if (!mounted) return;
-      _snack(result.ok ? 'ENVIADO POR BLE AL RELOJ' : 'GUARDADO LOCAL (${result.message})');
-    } else {
-      _snack('MENSAJE ENVIADO POR $senderName');
-    }
   }
 
   void _clearChatHistory() {
     setState(() {
       _messages.clear();
-      _phoneSentCount = 0;
-      _watchSentCount = 0;
+      _seenChatIds.clear();
       _chatError = null;
     });
     _snack('HISTORIAL LIMPIADO');
@@ -277,9 +334,11 @@ class _WearableScreenState extends State<WearableScreen> {
           Text(
             unsupported
                 ? 'El enlace Data Layer solo existe en Android.'
-                : connected
-                    ? 'El enlace BLE está activo. Puedes vincular la sesión y probar el envío.'
-                    : 'Abre la app del reloj y acércalo. Si usas emuladores, empareja el reloj desde Android Studio.',
+                : connected && status?.wearAppInstalled == true
+                    ? 'La app Rooms4ums está instalada en el reloj y el enlace está activo.'
+                    : connected
+                        ? 'El reloj está emparejado, pero falta instalar y abrir la app Rooms4ums.'
+                        : 'Abre la app del reloj y acércalo. Si usas emuladores, empareja el reloj desde Android Studio.',
             style: const TextStyle(color: AppColors.textSecondary, fontSize: 10, height: 1.5),
           ),
           if (status?.error != null) ...[
@@ -389,6 +448,7 @@ class _WearableScreenState extends State<WearableScreen> {
 
   Widget _deviceChatPanel(WearStatus? status) {
     final watchName = (status?.nodes.isNotEmpty ?? false) ? status!.nodes.first.name : 'Wear OS';
+    final canSend = status?.connected == true && status?.wearAppInstalled == true;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
@@ -419,45 +479,8 @@ class _WearableScreenState extends State<WearableScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'A: Smartphone  |  B: $watchName',
+            canSend ? 'MENSAJES REALES · TELÉFONO ↔ $watchName' : 'MENSAJES DIRECTOS CON EL RELOJ',
             style: const TextStyle(color: AppColors.textPrimary, fontSize: 10),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'ENVIADOS A: $_phoneSentCount   ·   ENVIADOS B: $_watchSentCount',
-            style: const TextStyle(color: AppColors.textSecondary, fontSize: 9, letterSpacing: 0.6),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => setState(() => _senderIsPhone = true),
-                  style: OutlinedButton.styleFrom(
-                    backgroundColor: _senderIsPhone ? AppColors.accent : Colors.transparent,
-                    foregroundColor: _senderIsPhone ? Colors.black : AppColors.textSecondary,
-                    side: BorderSide(color: _senderIsPhone ? AppColors.accent : AppColors.winBorder),
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    shape: const RoundedRectangleBorder(),
-                  ),
-                  child: const Text('EMISOR: A (TEL)', style: TextStyle(fontSize: 9)),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => setState(() => _senderIsPhone = false),
-                  style: OutlinedButton.styleFrom(
-                    backgroundColor: !_senderIsPhone ? AppColors.accent : Colors.transparent,
-                    foregroundColor: !_senderIsPhone ? Colors.black : AppColors.textSecondary,
-                    side: BorderSide(color: !_senderIsPhone ? AppColors.accent : AppColors.winBorder),
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    shape: const RoundedRectangleBorder(),
-                  ),
-                  child: const Text('EMISOR: B (RELOJ)', style: TextStyle(fontSize: 9)),
-                ),
-              ),
-            ],
           ),
           const SizedBox(height: 10),
           Row(
@@ -465,7 +488,7 @@ class _WearableScreenState extends State<WearableScreen> {
               Expanded(
                 child: TextField(
                   controller: _messageController,
-                  maxLength: SecurityValidators.maxMessageLength,
+                  maxLength: 140,
                   style: const TextStyle(fontSize: 11),
                   decoration: const InputDecoration(
                     hintText: 'Mensaje breve...',
@@ -477,7 +500,7 @@ class _WearableScreenState extends State<WearableScreen> {
               ),
               const SizedBox(width: 8),
               ElevatedButton(
-                onPressed: _sendDeviceMessage,
+                onPressed: _busy ? null : _sendDeviceMessage,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.accent,
                   foregroundColor: Colors.black,
@@ -491,6 +514,13 @@ class _WearableScreenState extends State<WearableScreen> {
           if (_chatError != null) ...[
             const SizedBox(height: 6),
             Text(_chatError!, style: const TextStyle(color: Color(0xFFFF7777), fontSize: 9)),
+          ],
+          if (!canSend) ...[
+            const SizedBox(height: 6),
+            const Text(
+              'El mensaje no se simula ni se guarda como enviado: conecta el reloj e instala su app.',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 9),
+            ),
           ],
           if (_messages.isNotEmpty) ...[
             const SizedBox(height: 10),
@@ -582,8 +612,9 @@ class _WearableScreenState extends State<WearableScreen> {
             '1. Instala la app del reloj y ábrela una vez (no tiene login).\n'
             '2. Empareja el reloj desde la app Wear OS del celular. Si el reloj es un emulador, usa "Pair with emulator" en esa misma app.\n'
             '3. Vuelve aquí: el nodo aparece como CERCA.\n'
-            '4. Pulsa CONECTAR WEARABLE: el reloj recibe tu sesión y registra su token FCM.\n'
-            '5. Publica desde otra cuenta y el aviso llegará al celular y al reloj.',
+            '4. Pulsa CONECTAR WEARABLE para activar notificaciones del foro en el reloj.\n'
+            '5. Envía un mensaje desde aquí; se recibe en el reloj y puedes responder desde su pantalla.\n'
+            '6. Las respuestas vuelven a esta app al recuperar el enlace.',
             style: TextStyle(color: AppColors.textSecondary, fontSize: 9, height: 1.6),
           ),
         ],

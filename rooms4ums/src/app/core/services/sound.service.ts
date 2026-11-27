@@ -6,24 +6,28 @@ import { isPlatformBrowser } from '@angular/common';
 })
 export class SoundService {
   private platformId = inject(PLATFORM_ID);
-  private clickAudio: any; // HTMLAudioElement
-
-  constructor() {
-    // Solo inicializamos si estamos en el navegador
-    if (isPlatformBrowser(this.platformId)) {
-      this.clickAudio = new Audio();
-      this.clickAudio.src = 'https://www.winhistory.de/more/win95/sound/click.wav';
-      this.clickAudio.load();
-    }
-  }
+  private audioContext: AudioContext | null = null;
 
   playClick() {
-    if (isPlatformBrowser(this.platformId) && this.clickAudio) {
-      const sound = this.clickAudio.cloneNode() as HTMLAudioElement;
-      sound.volume = 0.3;
-      sound.play().catch(() => {
-        // Silencioso si falla (políticas de navegador)
-      });
+    if (!isPlatformBrowser(this.platformId) || typeof AudioContext === 'undefined') return;
+
+    try {
+      this.audioContext ??= new AudioContext();
+      const context = this.audioContext;
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.frequency.value = 880;
+      gain.gain.setValueAtTime(0.04, context.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.04);
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start();
+      oscillator.stop(context.currentTime + 0.04);
+      if (context.state === 'suspended') {
+        void context.resume().catch(error => console.warn('[SOUND] Could not resume audio:', error));
+      }
+    } catch (error) {
+      console.warn('[SOUND] Could not play click feedback:', error);
     }
   }
 }

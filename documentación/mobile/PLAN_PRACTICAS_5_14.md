@@ -159,7 +159,7 @@ Adaptación de Firestore al stack real **MongoDB + PostgreSQL + SQLite**:
   - `login_screen.dart` y `register_screen.dart`: integrados con `SecurityValidators` y `maxLength`.
   - `push_service.dart` y `wearos/.../WearDataLayerListener.kt`: eliminada la impresión de tokens FCM/títulos sensibles en logs.
 - **Práctica 6 (Interacción entre Dispositivos):**
-  - `wearable_screen.dart`, `wear_service.dart`, `MainActivity.kt` (Flutter) y `WearDataLayerListener.kt` (Wear OS): panel interactivo Teléfono (A) ↔ Wear OS (B) sobre Data Layer BLE (`/rooms4ums/chat`), validación de vacío, marca de hora, contadores por dispositivo, limpieza de historial y notificación visual.
+  - `wearable_screen.dart`, `wear_service.dart`, `MainActivity.kt` (Flutter), `WearReplyListener.kt` (teléfono), `WearDataLayerListener.kt`, `WearChatStore.kt` y `MainActivity.kt` (Wear OS): mensajes reales bidireccionales por Data Layer; el reloj muestra mensajes recientes y responde desde su pantalla. La app solo confirma mensajes enviados al reloj compatible y conectado; no simula el segundo dispositivo.
 - **Prácticas 7, 9, 10 y 12 (Backend CRUD, Seguridad, Roles, Idempotencia y Resiliencia):**
   - `backendrooms4ums/src/forum/dto/forum.dto.ts`: DTOs con `class-validator` (`CreatePostDto`, `UpdatePostDto`, `CreateCommentDto`) bloqueando campos no permitidos (`authorId` spoofing).
   - `post.schema.ts`, `posts.service.ts` y `forum.controller.ts`: campos `status`, `priority`, `assignedAgentId` e índice único disperso `idempotencyKey`; endpoints `PATCH /api/forum/posts/:id`, `DELETE /api/forum/posts/:id` y `POST /api/forum/posts/:id/assign` con validación de propiedad/rol (`403 Forbidden`) y control optimista de versión (`__v` -> `409 Conflict`).

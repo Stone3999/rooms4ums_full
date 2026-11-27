@@ -3,6 +3,18 @@ import { isPlatformBrowser } from '@angular/common';
 import { io, Socket } from 'socket.io-client';
 import { BehaviorSubject } from 'rxjs';
 
+export function isRecoverableMicrophoneError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return [
+    'NotFoundError',
+    'DevicesNotFoundError',
+    'NotAllowedError',
+    'PermissionDeniedError',
+    'NotReadableError',
+    'OverconstrainedError'
+  ].includes(error.name);
+}
+
 export interface VoiceUser {
   id: string;
   username: string;
@@ -42,6 +54,7 @@ export class VoiceService {
 
   private screenStream: MediaStream | null = null;
   private isSharingScreen = false;
+  microphoneAvailable = true;
 
   constructor() {
     if (isPlatformBrowser(this.platformId)) {
@@ -118,15 +131,37 @@ export class VoiceService {
     });
   }
 
-  async joinRoom(roomId: string, username: string) {
-    if (!isPlatformBrowser(this.platformId)) return;
+  async joinRoom(roomId: string, username: string): Promise<boolean> {
+    if (!isPlatformBrowser(this.platformId)) return false;
 
     try {
-      this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      
+      this.microphoneAvailable = true;
+      try {
+        this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        if (this.localStream.getAudioTracks().length === 0) {
+          this.localStream.getTracks().forEach(track => track.stop());
+          this.localStream = null;
+          this.microphoneAvailable = false;
+        }
+      } catch (error) {
+        if (!isRecoverableMicrophoneError(error)) throw error;
+        this.localStream = null;
+        this.microphoneAvailable = false;
+        console.warn('[VOICE] Joining in listen-only mode: no usable microphone.', error);
+      }
+
       const response: any = await new Promise((resolve) => {
         this.socket.emit('join-room', { roomId, username }, (res: any) => resolve(res));
       });
+
+      if (response?.error) {
+        throw new Error(response.error === 'CHANNEL_NOT_FOUND'
+          ? 'Este canal de voz ya no está disponible.'
+          : 'Este canal de voz expiró.');
+      }
+      if (!this.microphoneAvailable) {
+        this.socket.emit('toggle-mute', { roomId, isMuted: true });
+      }
 
       if (response && response.users) {
         for (const user of response.users) {
@@ -134,10 +169,30 @@ export class VoiceService {
           await this.callUser(user.id, user.username);
         }
       }
+      return this.microphoneAvailable;
     } catch (error) {
+      this.localStream?.getTracks().forEach(track => track.stop());
+      this.localStream = null;
+      this.microphoneAvailable = true;
       console.error('[VOICE] Error joining room:', error);
       throw error;
     }
+  }
+
+  async enableMicrophone(roomId: string): Promise<void> {
+    if (this.localStream) return;
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    if (stream.getAudioTracks().length === 0) {
+      stream.getTracks().forEach(track => track.stop());
+      throw new Error('No se encontró un micrófono disponible.');
+    }
+
+    this.localStream = stream;
+    this.microphoneAvailable = true;
+    for (const pc of this.peerConnections.values()) {
+      stream.getAudioTracks().forEach(track => pc.addTrack(track, stream));
+    }
+    this.toggleMute(roomId, false);
   }
 
   private async callUser(userId: string, username: string) {
@@ -147,6 +202,9 @@ export class VoiceService {
     this.localStream?.getTracks().forEach(track => {
       pc.addTrack(track, this.localStream!);
     });
+    if (!this.localStream) {
+      pc.addTransceiver('audio', { direction: 'recvonly' });
+    }
 
     // ¡CLAVE! Si ya estamos compartiendo pantalla, añadir el video a la nueva conexión
     if (this.isSharingScreen && this.screenStream) {
@@ -275,6 +333,7 @@ export class VoiceService {
 
     // RESETEAR ESTADOS
     this.isSharingScreen = false;
+    this.microphoneAvailable = true;
     this.screenStream = null;
     this._localScreenStream.next(null);
     this._users.next([]);

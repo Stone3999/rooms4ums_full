@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/services.dart';
 
 /// PRÁCTICA 2 - Puente con el reloj (Data Layer API).
@@ -31,12 +33,14 @@ class WearNode {
 class WearStatus {
   final bool supported;
   final bool connected;
+  final bool wearAppInstalled;
   final List<WearNode> nodes;
   final String? error;
 
   const WearStatus({
     required this.supported,
     required this.connected,
+    required this.wearAppInstalled,
     required this.nodes,
     this.error,
   });
@@ -44,6 +48,7 @@ class WearStatus {
   factory WearStatus.unsupported() => const WearStatus(
         supported: false,
         connected: false,
+        wearAppInstalled: false,
         nodes: <WearNode>[],
         error: 'ESTA VERSION SOLO CORRE EN ANDROID',
       );
@@ -57,6 +62,7 @@ class WearStatus {
     return WearStatus(
       supported: true,
       connected: raw['connected'] == true,
+      wearAppInstalled: nodes.any((node) => node.wearApp),
       nodes: nodes,
       error: raw['error']?.toString(),
     );
@@ -107,6 +113,7 @@ class WearService {
       return WearStatus(
         supported: true,
         connected: false,
+        wearAppInstalled: false,
         nodes: const <WearNode>[],
         error: e.message ?? 'ERROR DEL PUENTE ANDROID',
       );
@@ -161,13 +168,15 @@ class WearService {
     }
   }
 
-  /// PRÁCTICA 6 - Envía un mensaje directo entre el teléfono y el reloj por BLE.
+  /// PRÁCTICA 6 - Envía un mensaje directo por el Data Layer de Wear OS.
   static Future<WearResult> sendChatMessage({
     required String sender,
     required String message,
+    required String messageId,
   }) async {
     try {
       final raw = await _channel.invokeMethod<dynamic>('chat', {
+        'id': messageId,
         'sender': sender,
         'message': message,
       });
@@ -182,5 +191,17 @@ class WearService {
     } on PlatformException catch (e) {
       return WearResult(false, e.message ?? 'ERROR AL ENVIAR MENSAJE');
     }
+  }
+
+  static Future<List<Map<String, dynamic>>> chatReplies() async {
+    final raw = await _channel.invokeMethod<dynamic>('chatReplies');
+    final decoded = raw is String ? jsonDecode(raw) : raw;
+    if (decoded is! List) {
+      throw const FormatException('Respuesta inválida del reloj.');
+    }
+    return decoded
+        .whereType<Map>()
+        .map((reply) => Map<String, dynamic>.from(reply))
+        .toList();
   }
 }

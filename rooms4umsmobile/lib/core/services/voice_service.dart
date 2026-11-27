@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_background/flutter_background.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
-import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'package:socket_io_client/socket_io_client.dart' as io;
 
 class VoiceParticipant {
   final String id;
@@ -49,7 +51,7 @@ class VoiceService extends ChangeNotifier {
     ],
   };
 
-  IO.Socket? _socket;
+  io.Socket? _socket;
   Completer<void>? _connectCompleter;
   final Map<String, RTCPeerConnection> _peerConnections = {};
   final Map<String, List<RTCIceCandidate>> _pendingCandidates = {};
@@ -64,6 +66,8 @@ class VoiceService extends ChangeNotifier {
   bool isConnected = false;
   bool isMuted = false;
   bool isSharingScreen = false;
+  bool microphoneUnavailable = false;
+  bool _backgroundExecutionEnabled = false;
   bool _isStoppingScreenShare = false;
 
   Future<void> _ensureConnected() async {
@@ -76,9 +80,9 @@ class VoiceService extends ChangeNotifier {
       _connectCompleter = Completer<void>();
     }
     if (_socket == null) {
-      _socket = IO.io(
+      _socket = io.io(
         _serverUrl,
-        IO.OptionBuilder()
+        io.OptionBuilder()
             .setTransports(['websocket'])
             .disableAutoConnect()
             .build(),
@@ -97,7 +101,7 @@ class VoiceService extends ChangeNotifier {
     }
   }
 
-  void _registerSocketListeners(IO.Socket socket) {
+  void _registerSocketListeners(io.Socket socket) {
     socket.onConnect((_) {
       isConnected = true;
       if (_connectCompleter != null && !_connectCompleter!.isCompleted) {
@@ -222,10 +226,23 @@ class VoiceService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      localAudioStream = await navigator.mediaDevices.getUserMedia({
-        'audio': true,
-        'video': false,
-      });
+      microphoneUnavailable = false;
+      error = null;
+      try {
+        localAudioStream = await navigator.mediaDevices.getUserMedia({
+          'audio': true,
+          'video': false,
+        });
+        if (localAudioStream!.getAudioTracks().isEmpty) {
+          await localAudioStream!.dispose();
+          localAudioStream = null;
+          microphoneUnavailable = true;
+        }
+      } on PlatformException {
+        microphoneUnavailable = true;
+        localAudioStream = null;
+      }
+
       final response = await _emitWithAck('join-room', {
         'roomId': roomId,
         'username': username,
@@ -235,7 +252,11 @@ class VoiceService extends ChangeNotifier {
       }
 
       activeRoomId = roomId;
-      isMuted = false;
+      isMuted = microphoneUnavailable;
+      if (microphoneUnavailable) {
+        error = 'MICRÓFONO NO DISPONIBLE; TE UNISTE EN MODO SOLO ESCUCHA.';
+        _socket?.emit('toggle-mute', {'roomId': roomId, 'isMuted': true});
+      }
       messages.clear();
       final users = response['users'];
       if (users is List) {
@@ -258,9 +279,10 @@ class VoiceService extends ChangeNotifier {
       _peerConnections.clear();
       _pendingCandidates.clear();
       await _disposeLocalMedia();
+      microphoneUnavailable = false;
       error = cause is StateError
           ? cause.message.toString()
-          : 'No se pudo iniciar el micrófono. Revisa los permisos de la app.';
+          : 'No se pudo entrar al canal de voz.';
       notifyListeners();
       rethrow;
     }
@@ -273,6 +295,11 @@ class VoiceService extends ChangeNotifier {
       for (final track in audio.getAudioTracks()) {
         await peer.addTrack(track, audio);
       }
+    } else {
+      await peer.addTransceiver(
+        kind: RTCRtpMediaType.RTCRtpMediaTypeAudio,
+        init: RTCRtpTransceiverInit(direction: TransceiverDirection.RecvOnly),
+      );
     }
     final screen = localScreenStream;
     if (screen != null) {
@@ -399,9 +426,43 @@ class VoiceService extends ChangeNotifier {
     }
   }
 
-  void toggleMute() {
+  Future<void> toggleMute() async {
     final roomId = activeRoomId;
     if (roomId == null) return;
+
+    if (localAudioStream == null) {
+      try {
+        final stream = await navigator.mediaDevices.getUserMedia({
+          'audio': true,
+          'video': false,
+        });
+        if (stream.getAudioTracks().isEmpty) {
+          await stream.dispose();
+          microphoneUnavailable = true;
+          error = 'NO SE ENCONTRÓ UN MICRÓFONO DISPONIBLE.';
+          notifyListeners();
+          return;
+        }
+        localAudioStream = stream;
+        microphoneUnavailable = false;
+        isMuted = false;
+        for (final peer in _peerConnections.values) {
+          for (final track in stream.getAudioTracks()) {
+            await peer.addTrack(track, stream);
+          }
+        }
+        _socket?.emit('toggle-mute', {'roomId': roomId, 'isMuted': false});
+        error = null;
+        notifyListeners();
+        return;
+      } on PlatformException {
+        microphoneUnavailable = true;
+        error = 'NO SE PUDO ACTIVAR EL MICRÓFONO. SIGUES EN MODO SOLO ESCUCHA.';
+        notifyListeners();
+        return;
+      }
+    }
+
     isMuted = !isMuted;
     for (final track in localAudioStream?.getAudioTracks() ?? <MediaStreamTrack>[]) {
       track.enabled = !isMuted;
@@ -424,6 +485,7 @@ class VoiceService extends ChangeNotifier {
           'En iOS se requiere configurar una extensión Broadcast Upload para compartir pantalla.',
         );
       }
+      await _enableAndroidScreenCapture();
       final stream = await navigator.mediaDevices.getDisplayMedia({
         'video': true,
         'audio': false,
@@ -445,6 +507,20 @@ class VoiceService extends ChangeNotifier {
       error = null;
       notifyListeners();
     } catch (cause) {
+      final failedStream = localScreenStream;
+      localScreenStream = null;
+      isSharingScreen = false;
+      for (final peer in _peerConnections.values) {
+        final senders = await peer.getSenders();
+        for (final sender in senders.where((sender) => sender.track?.kind == 'video')) {
+          await peer.removeTrack(sender);
+        }
+      }
+      for (final track in failedStream?.getTracks() ?? <MediaStreamTrack>[]) {
+        await track.stop();
+      }
+      await failedStream?.dispose();
+      await _disableAndroidScreenCapture();
       if (cause is UnsupportedError) {
         error = cause.message.toString();
       } else if (cause is StateError) {
@@ -454,6 +530,34 @@ class VoiceService extends ChangeNotifier {
       }
       notifyListeners();
       rethrow;
+    }
+  }
+
+  Future<void> _enableAndroidScreenCapture() async {
+    if (defaultTargetPlatform != TargetPlatform.android || _backgroundExecutionEnabled) return;
+
+    const config = FlutterBackgroundAndroidConfig(
+      notificationTitle: 'Rooms4ums comparte tu pantalla',
+      notificationText: 'La pantalla se transmite en tu canal de voz.',
+      notificationImportance: AndroidNotificationImportance.normal,
+      notificationIcon: AndroidResource(name: 'ic_launcher', defType: 'mipmap'),
+    );
+    if (!await FlutterBackground.initialize(androidConfig: config)) {
+      throw StateError('Se requieren permisos de notificación para compartir la pantalla.');
+    }
+    if (!await FlutterBackground.enableBackgroundExecution()) {
+      await FlutterBackground.disableBackgroundExecution();
+      throw StateError('Android no pudo iniciar el servicio de captura de pantalla.');
+    }
+    _backgroundExecutionEnabled = true;
+  }
+
+  Future<void> _disableAndroidScreenCapture() async {
+    if (!_backgroundExecutionEnabled) return;
+    final disabled = await FlutterBackground.disableBackgroundExecution();
+    _backgroundExecutionEnabled = false;
+    if (!disabled) {
+      throw StateError('Android no pudo detener el servicio de captura de pantalla.');
     }
   }
 
@@ -476,6 +580,7 @@ class VoiceService extends ChangeNotifier {
       await stream?.dispose();
       _socket?.emit('toggle-video', {'roomId': roomId, 'isSharing': false});
       notifyListeners();
+      await _disableAndroidScreenCapture();
     } finally {
       _isStoppingScreenShare = false;
     }
@@ -511,6 +616,8 @@ class VoiceService extends ChangeNotifier {
     participants.clear();
     messages.clear();
     isMuted = false;
+    microphoneUnavailable = false;
+    await _disableAndroidScreenCapture();
     notifyListeners();
   }
 

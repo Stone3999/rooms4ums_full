@@ -279,7 +279,11 @@ class _VoiceScreenState extends State<VoiceScreen> {
                       color: AppColors.accent,
                     ),
                     title: Text('$_username (TÚ)'),
-                    subtitle: Text(_voice.isMuted ? 'MICRÓFONO SILENCIADO' : 'MICRÓFONO ACTIVO'),
+                    subtitle: Text(
+                      _voice.microphoneUnavailable
+                          ? 'SIN MICRÓFONO · MODO SOLO ESCUCHA'
+                          : (_voice.isMuted ? 'MICRÓFONO SILENCIADO' : 'MICRÓFONO ACTIVO'),
+                    ),
                   ),
                   for (final participant in _voice.participants) ...[
                     ListTile(

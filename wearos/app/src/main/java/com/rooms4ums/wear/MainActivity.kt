@@ -6,9 +6,13 @@ import android.content.SharedPreferences
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import android.widget.Button
+import android.widget.EditText
 import android.widget.TextView
 import androidx.core.app.ActivityCompat
 import com.google.android.gms.wearable.Wearable
+import org.json.JSONObject
+import java.util.UUID
 
 /**
  * Actividad principal del reloj. NO tiene login: la sesión llega desde el
@@ -25,10 +29,15 @@ class MainActivity : Activity() {
     private lateinit var statusText: TextView
     private lateinit var sessionText: TextView
     private lateinit var sensorText: TextView
+    private lateinit var chatHistoryText: TextView
+    private lateinit var chatInput: EditText
 
     /** Se dispara cuando el servicio guarda el JWT que mandó el celular. */
     private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key == SharedPrefs.KEY_JWT) updateSessionStatus()
+    }
+    private val chatPrefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == WearChatStore.KEY_MESSAGES) updateChatHistory()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -38,22 +47,29 @@ class MainActivity : Activity() {
         statusText = findViewById(R.id.status)
         sessionText = findViewById(R.id.sesion)
         sensorText = findViewById(R.id.sensores)
+        chatHistoryText = findViewById(R.id.chat_history)
+        chatInput = findViewById(R.id.chat_input)
+        findViewById<Button>(R.id.chat_send).setOnClickListener { sendChatReply() }
 
         requestNotificationPermission()
         startTelemetryService()
         checkPhoneConnection()
         handleDeepLink(intent)
         updateSessionStatus()
+        updateChatHistory()
     }
 
     override fun onResume() {
         super.onResume()
         SharedPrefs.prefs(this).registerOnSharedPreferenceChangeListener(prefsListener)
+        WearChatStore.prefs(this).registerOnSharedPreferenceChangeListener(chatPrefsListener)
         updateSessionStatus()
+        updateChatHistory()
     }
 
     override fun onPause() {
         SharedPrefs.prefs(this).unregisterOnSharedPreferenceChangeListener(prefsListener)
+        WearChatStore.prefs(this).unregisterOnSharedPreferenceChangeListener(chatPrefsListener)
         super.onPause()
     }
 
@@ -80,6 +96,51 @@ class MainActivity : Activity() {
         )
     }
 
+    private fun updateChatHistory() {
+        chatHistoryText.text = WearChatStore.history(this)
+    }
+
+    private fun sendChatReply() {
+        val message = chatInput.text.toString().trim()
+        if (message.isEmpty()) {
+            chatInput.error = "Escribe un mensaje"
+            return
+        }
+
+        Wearable.getNodeClient(this).connectedNodes
+            .addOnSuccessListener { nodes ->
+                val phone = nodes.firstOrNull()
+                if (phone == null) {
+                    sensorText.text = getString(R.string.status_sin_telefono)
+                    return@addOnSuccessListener
+                }
+
+                val id = UUID.randomUUID().toString()
+                val payload = JSONObject()
+                    .put("id", id)
+                    .put("sender", "Wear OS")
+                    .put("message", message)
+                    .toString()
+                    .toByteArray(Charsets.UTF_8)
+
+                Wearable.getMessageClient(this)
+                    .sendMessage(phone.id, WearDataLayerListener.PATH_CHAT_REPLY, payload)
+                    .addOnSuccessListener {
+                        WearChatStore.append(this, id, "Wear OS", message)
+                        chatInput.text.clear()
+                        chatInput.error = null
+                        updateChatHistory()
+                        sensorText.text = "Mensaje enviado al teléfono"
+                    }
+                    .addOnFailureListener {
+                        sensorText.text = getString(R.string.status_error_enlace)
+                    }
+            }
+            .addOnFailureListener {
+                sensorText.text = getString(R.string.status_error_enlace)
+            }
+    }
+
     /** PRÁCTICA 1 - El servicio en primer plano mantiene los sensores vivos. */
     private fun startTelemetryService() {
         val service = Intent(this, TelemetryService::class.java)
@@ -92,7 +153,7 @@ class MainActivity : Activity() {
 
     /**
      * PRÁCTICA 2 - Comprueba si hay un teléfono emparejado y en alcance.
-     * Si `connectedNodes` viene vacío, el enlace BLE no está activo.
+     * Si `connectedNodes` viene vacío, no hay un teléfono enlazado y alcanzable.
      */
     private fun checkPhoneConnection() {
         Wearable.getNodeClient(this).connectedNodes

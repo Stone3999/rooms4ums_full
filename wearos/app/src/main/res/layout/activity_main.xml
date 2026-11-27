@@ -60,6 +60,48 @@
                 android:textSize="9sp"
                 android:fontFamily="monospace" />
 
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:text="MENSAJES"
+                android:textColor="@color/acento"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:fontFamily="monospace" />
+
+            <TextView
+                android:id="@+id/chat_history"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:maxLines="5"
+                android:text="Sin mensajes todavía"
+                android:textColor="@color/texto"
+                android:textSize="9sp"
+                android:fontFamily="monospace" />
+
+            <EditText
+                android:id="@+id/chat_input"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:hint="Responder al teléfono"
+                android:inputType="textCapSentences"
+                android:maxLength="140"
+                android:singleLine="true"
+                android:textColor="@color/texto"
+                android:textColorHint="@color/texto_suave"
+                android:textSize="10sp"
+                android:fontFamily="monospace" />
+
+            <Button
+                android:id="@+id/chat_send"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="ENVIAR"
+                android:textSize="9sp" />
+
         </LinearLayout>
     </ScrollView>
 </androidx.wear.widget.BoxInsetLayout>

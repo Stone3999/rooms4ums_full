@@ -17,6 +17,9 @@ import { FormsModule } from '@angular/forms';
       <!-- MODO SELECCIÓN DE CANALES -->
       @if (!activeChannel()) {
         <div class="selection-mode">
+          @if (connectionError()) {
+            <p class="voice-error" role="alert">{{ connectionError() }}</p>
+          }
           <div class="header-row">
             <div class="header-left">
               <h2 class="win-title">
@@ -117,6 +120,9 @@ import { FormsModule } from '@angular/forms';
               <span>{{ langService.translate('EXIT') }}</span>
             </button>
           </div>
+          @if (connectionError()) {
+            <p class="voice-error" role="alert">{{ connectionError() }}</p>
+          }
 
           <div class="voice-main-layout">
             <!-- PANEL IZQUIERDO: USUARIOS -->
@@ -127,6 +133,7 @@ import { FormsModule } from '@angular/forms';
                   <div class="user-box-inner">
                     <div class="user-avatar-rect"><i class="pixelart-icons-font-user"></i></div>
                     <span class="user-name-text">{{ localUsername() }} ({{ langService.translate('YOU') || 'Tú' }})</span>
+                    <span *ngIf="!microphoneAvailable()" class="mic-status">SOLO ESCUCHA</span>
                     <i *ngIf="isMuted()" class="pixelart-icons-font-mic-off status-icon-red"></i>
                   </div>
                 </div>
@@ -176,7 +183,7 @@ import { FormsModule } from '@angular/forms';
                 <div class="controls-row">
                   <button class="ctrl-btn" [class.active]="!isMuted()" (click)="toggleMute()">
                     <i [class]="isMuted() ? 'pixelart-icons-font-mic-off' : 'pixelart-icons-font-mic'"></i>
-                    <span>{{ isMuted() ? langService.translate('UNMUTE') : langService.translate('MUTE') }}</span>
+                    <span>{{ !microphoneAvailable() ? 'ACTIVAR MICRÓFONO' : (isMuted() ? langService.translate('UNMUTE') : langService.translate('MUTE')) }}</span>
                   </button>
                   <button class="ctrl-btn" [class.active]="isSharingScreen()" (click)="toggleScreen()">
                     <i class="pixelart-icons-font-monitor"></i>
@@ -273,6 +280,8 @@ import { FormsModule } from '@angular/forms';
     .user-box-inner { display: flex; align-items: center; gap: 10px; padding: 6px; background: #080808; }
     .user-avatar-rect { width: 22px; height: 22px; border: 1px solid var(--accent-color); display: flex; align-items: center; justify-content: center; font-size: 0.6rem; }
     .user-name-text { font-size: 0.65rem; color: #eee; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mic-status { color: #ff8c00; font-size: 0.5rem; white-space: nowrap; }
+    .voice-error { color: #ff7777; font-size: 0.7rem; margin-bottom: 12px; }
 
     .main-stage { display: flex; flex-direction: column; overflow: hidden; }
     .stage-content { flex: 1; display: flex; align-items: center; justify-content: center; position: relative; background: #020202; overflow: hidden; }
@@ -356,6 +365,8 @@ export class VoiceViewComponent implements OnInit, OnDestroy, AfterViewChecked {
   activeChannel = signal<string | null>(null);
   isConnected = signal<boolean>(false);
   isMuted = signal<boolean>(false);
+  microphoneAvailable = signal<boolean>(true);
+  connectionError = signal<string | null>(null);
   isSpeaking = signal<boolean>(false);
   localUsername = signal<string>('');
   remoteUsers = signal<VoiceUser[]>([]);
@@ -475,11 +486,15 @@ export class VoiceViewComponent implements OnInit, OnDestroy, AfterViewChecked {
 
   async joinChannel(channelId: any) {
     if (!isPlatformBrowser(this.platformId) || !channelId) return;
+    this.connectionError.set(null);
     this.activeChannel.set(channelId);
     try {
-      await this.voiceService.joinRoom(channelId, this.localUsername());
+      const microphoneAvailable = await this.voiceService.joinRoom(channelId, this.localUsername());
+      this.microphoneAvailable.set(microphoneAvailable);
+      this.isMuted.set(!microphoneAvailable);
       this.isConnected.set(true);
     } catch (error: any) {
+      this.connectionError.set(error?.message || 'No se pudo entrar al canal de voz.');
       this.activeChannel.set(null);
     }
   }
@@ -505,8 +520,12 @@ export class VoiceViewComponent implements OnInit, OnDestroy, AfterViewChecked {
     if (!isPlatformBrowser(this.platformId)) return;
     const channelId = this.activeChannel();
     if (!channelId) return;
-    const isSharing = await this.voiceService.toggleScreenShare(channelId);
-    this.isSharingScreen.set(isSharing);
+    try {
+      const isSharing = await this.voiceService.toggleScreenShare(channelId);
+      this.isSharingScreen.set(isSharing);
+    } catch (error: any) {
+      this.connectionError.set(error?.message || 'No se pudo compartir la pantalla.');
+    }
   }
 
   private scrollToBottom() {
@@ -516,9 +535,20 @@ export class VoiceViewComponent implements OnInit, OnDestroy, AfterViewChecked {
     }
   }
 
-  toggleMute() {
+  async toggleMute() {
     const channelId = this.activeChannel();
     if (!channelId) return;
+    if (!this.microphoneAvailable()) {
+      try {
+        await this.voiceService.enableMicrophone(channelId);
+        this.microphoneAvailable.set(true);
+        this.isMuted.set(false);
+        this.connectionError.set(null);
+      } catch (error: any) {
+        this.connectionError.set(error?.message || 'No se pudo activar el micrófono.');
+      }
+      return;
+    }
     this.isMuted.set(!this.isMuted());
     this.voiceService.toggleMute(channelId, this.isMuted());
   }
@@ -529,6 +559,8 @@ export class VoiceViewComponent implements OnInit, OnDestroy, AfterViewChecked {
     this.isConnected.set(false);
     this.selectedStreamerId.set(null);
     this.isSharingScreen.set(false);
+    this.microphoneAvailable.set(true);
+    this.isMuted.set(false);
   }
 
   ngOnDestroy() {

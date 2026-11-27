@@ -156,24 +156,23 @@ Estado: IMPLEMENTADO, con pruebas unitarias y de widget en el proyecto.
 PRACTICA 6 - INTERACCION ENTRE DISPOSITIVOS
 ===============================================================================
 
-Adaptacion: la pantalla Wearable permite probar el intercambio de mensajes
-entre los emisores A (telefono) y B (reloj), con validacion de texto, hora,
-contadores y limpieza del historial. Ademas, WearService expone el envio
-directo telefono-reloj por MessageClient a traves del canal BLE/Data Layer.
-El reloj recibe mensajes y muestra notificaciones.
+Adaptacion: intercambio real de mensajes entre el telefono y la app instalada
+en Wear OS mediante MessageClient/Data Layer. El telefono envia mensajes al
+reloj y recibe las respuestas del reloj en la app; el historial no simula
+emisores ni marca entregas cuando no hay un reloj compatible conectado.
+El reloj conserva los mensajes recientes y responde desde su propia pantalla.
 
 Archivos principales:
   rooms4umsmobile/lib/ui/screens/wearable_screen.dart
   rooms4umsmobile/lib/core/services/wear_service.dart
   rooms4umsmobile/android/app/src/main/kotlin/com/stone3999/rooms4ums_mobile/MainActivity.kt
-  wearos/.../WearDataLayerListener.kt
+  rooms4umsmobile/android/app/src/main/kotlin/com/stone3999/rooms4ums_mobile/WearReplyListener.kt
+  wearos/app/src/main/java/com/rooms4ums/wear/MainActivity.kt
+  wearos/app/src/main/java/com/rooms4ums/wear/WearDataLayerListener.kt
+  wearos/app/src/main/java/com/rooms4ums/wear/WearChatStore.kt
 
-La interfaz de prueba puede representar dos emisores localmente. Esa vista
-simulada no demuestra por si sola que dos dispositivos fisicos intercambien
-mensajes. La validacion automatizada disponible comprueba vacios, contadores y
-limpieza; la prueba con reloj emparejado queda pendiente de evidencia.
-
-Estado: IMPLEMENTADO; EVIDENCIA FISICA PENDIENTE.
+Estado: IMPLEMENTADO; el intercambio fisico requiere un telefono y un reloj
+Wear OS emparejados con la app instalada en ambos.
 
 Extension móvil de chat de voz: la app Flutter comparte los canales del
 gateway Socket.IO con la web, solicita acceso al micrófono, establece audio

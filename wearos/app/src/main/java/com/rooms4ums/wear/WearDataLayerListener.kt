@@ -77,6 +77,9 @@ class WearDataLayerListener : WearableListenerService() {
                 val sender = json?.optString("sender")?.ifEmpty { "Smartphone" } ?: "Smartphone"
                 val message = json?.optString("message").orEmpty()
                 if (message.isNotEmpty()) {
+                    val id = json?.optString("id")?.ifEmpty { messageEvent.requestId.toString() }
+                        ?: messageEvent.requestId.toString()
+                    WearChatStore.append(this, id, sender, message)
                     Log.i(TAG, "Mensaje recibido de $sender")
                     Notify.show(this, "$sender: $message")
                 }
@@ -114,6 +117,7 @@ class WearDataLayerListener : WearableListenerService() {
         const val PATH_OPEN_ROOM = "/rooms4ums/open-room"
         const val PATH_POST_CREATED = "/rooms4ums/post-created"
         const val PATH_CHAT = "/rooms4ums/chat"
+        const val PATH_CHAT_REPLY = "/rooms4ums/chat-reply"
     }
 }
 

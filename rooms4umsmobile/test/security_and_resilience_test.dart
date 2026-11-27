@@ -65,7 +65,7 @@ void main() {
   });
 
   group('Práctica 6 - Interacción entre dispositivos (WearableScreen)', () {
-    testWidgets('valida mensaje vacío, incrementa contadores y limpia historial', (tester) async {
+    testWidgets('valida mensajes y no simula entregas sin un reloj conectado', (tester) async {
       await tester.pumpWidget(MaterialApp(theme: AppTheme.darkRetroTheme, home: const WearableScreen()));
       await tester.pump();
 
@@ -79,20 +79,8 @@ void main() {
       await tester.enterText(find.byType(TextField).last, 'Hola reloj');
       await tester.tap(find.byIcon(Icons.send));
       await tester.pump();
-      expect(find.text('ENVIADOS A: 1   ·   ENVIADOS B: 0'), findsOneWidget);
-
-      // Cambio a Dispositivo B (Wear OS) y envío
-      await tester.tap(find.text('EMISOR: B (RELOJ)'));
-      await tester.pump();
-      await tester.enterText(find.byType(TextField).last, 'Recibido');
-      await tester.tap(find.byIcon(Icons.send));
-      await tester.pump();
-      expect(find.text('ENVIADOS A: 1   ·   ENVIADOS B: 1'), findsOneWidget);
-
-      // Limpiar historial
-      await tester.tap(find.text('LIMPIAR'));
-      await tester.pump();
-      expect(find.text('ENVIADOS A: 0   ·   ENVIADOS B: 0'), findsOneWidget);
+      expect(find.text('CONECTA UN RELOJ CON LA APP ROOMS4UMS INSTALADA'), findsOneWidget);
+      expect(find.text('Teléfono: Hola reloj'), findsNothing);
     });
   });
 
